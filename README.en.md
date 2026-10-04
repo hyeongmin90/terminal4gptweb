@@ -2,26 +2,29 @@
 
 [한국어](./README.md) · [GPT bootstrap prompt](./GPT_PROMPT.md) · [Control commands](./CONTROL_COMMANDS.md) · [Detailed installation](./INSTALL.md)
 
-**Give GPT on the web a real terminal surface without exposing a shell server to the internet.**
+**Give web-based AI agents controlled access to a real development environment without exposing a shell server to the internet.**
 
-`Terminal4GPTWeb` turns Notion into a bridge between a web-based GPT session, a persistent Linux PTY, and a Playwright-controlled browser.
+`Terminal4GPTWeb` uses Notion as a **control bridge between a web AI client and a local Linux PTY / Playwright runtime**.
 
-When GPT can read and edit the generated Notion page through a Notion connector, it can:
+GitHub and Notion connectors are good at providing **context** from code, issues, PRs, and documents. Terminal4GPTWeb adds the missing **execution and verification layer** on the user's actual machine.
 
-- inspect the current terminal screen;
-- send shell commands;
-- press terminal keys such as Enter, arrows, Backspace, Esc, and function keys;
-- send Ctrl combinations such as Ctrl-C, Ctrl-O, and Ctrl-X;
-- interact with TUI programs such as `nano`, `vim`, `less`, `top`, Codex, and other terminal applications;
-- keep shell state such as `cd`, environment variables, REPL sessions, and foreground programs alive between requests;
-- open web pages with Playwright, inspect screenshots with GPT Vision, and control the browser with viewport-relative mouse coordinates;
+When a web AI client can read and edit the generated Notion page, it can:
+
+- run real shell commands such as `git`, builds, unit tests, and integration tests;
+- use locally installed tools such as Docker, Kubernetes, SSH, and cloud CLIs;
+- inspect the current terminal screen and keep a persistent PTY session alive;
+- send real key events such as Enter, arrows, and Ctrl-C and interact with TUIs;
+- use terminal applications such as `nano`, `vim`, `less`, `top`, and Codex;
+- drive a Playwright browser and verify web UIs end to end;
 - optionally run the shell inside [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime), with filesystem and network limits and credential masking.
 
 In short:
 
-> **GPT Web ↔ Notion ↔ PTY / Playwright ↔ WSL / Linux / Web**
+> **Web AI ↔ Notion ↔ Terminal4GPTWeb ↔ PTY / Playwright ↔ WSL / Linux / Web**
 
-Notion is the shared control surface. The local daemon owns the real terminal.
+Notion is not the destination of the product. It acts as a **transport / control surface** that web AI clients can access, while the local daemon owns the real terminal and browser sessions.
+
+Terminal4GPTWeb is not tied to a specific model provider. Any web AI client that can reliably read and edit the generated Notion page can use the same bridge. The current documentation describes the ChatGPT Web workflow in the most detail.
 
 > [!CAUTION]
 > PTY sandboxing is **optional**. With `sandbox.enabled = false` (the default), anything written to Input runs with the permissions of the Linux user running the daemon. With `sandbox.enabled = true` the shell runs inside [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime), which adds filesystem, network and credential-masking rules, but it does not replace normal secret-management practices.
@@ -30,15 +33,18 @@ Notion is the shared control surface. The local daemon owns the real terminal.
 
 ## Why this exists
 
-Web-based GPT clients are convenient for reasoning, coding, and remote assistance, but they normally do not have direct access to your local WSL terminal.
+Web AI connectors for GitHub and Notion are useful for reading and writing remote context such as repositories, issues, PRs, and documents. But those connectors do not by themselves run `npm test`, `pytest`, `kubectl`, `docker`, SSH sessions, local servers, or browser E2E flows inside the user's real development environment.
 
-This project uses Notion as a lightweight bridge:
+Terminal4GPTWeb fills that **gap between connectors and runtime execution**:
 
-1. GPT reads the **Terminal** block.
-2. GPT writes commands or key events to the **Input** block.
+1. The web AI reads the **Terminal** block.
+2. The web AI writes a command or key event to the **Input** block.
 3. `t4g` polls that block and forwards the input to a real PTY.
-4. The PTY output is rendered back into the **Terminal** block.
-5. GPT reads the updated screen and continues.
+4. The PTY screen is rendered back into the **Terminal** block.
+5. The web AI reads the updated state and continues.
+6. When needed, it uses the same control path to drive Playwright and verify the resulting UI.
+
+It is not a replacement for SaaS connectors. It turns the context those connectors provide into **execution and verification on the real machine**.
 
 No public SSH endpoint, custom web server, database, or message queue is required.
 
@@ -48,7 +54,7 @@ No public SSH endpoint, custom web server, database, or message queue is require
 
 ```text
 ┌──────────────────────┐
-│  GPT / ChatGPT Web   │
+│    Web AI client     │
 │   Notion connector   │
 └──────────┬───────────┘
            │ read / edit
@@ -124,8 +130,9 @@ Tested interaction patterns include Bash, Python REPL, nano, vim-style key seque
 - Bash
 - A Notion API token: Personal Access Token or Internal Connection token
 - A Notion page to use as the parent for generated Terminal4GPTWeb pages
-- **GPT / ChatGPT Web with the Notion connection enabled** for remote GPT control
-- Optional but recommended for development: **GitHub connection** in ChatGPT
+- A web AI client with a **Notion connection that can read and edit the generated page**
+- ChatGPT Web is the reference client documented most extensively here
+- Optional but recommended for development: the AI client's **GitHub connection**
 - Optional for recurring operations: ChatGPT scheduled tasks / automations, where available
 - Only for sandbox mode: Node.js 22.12+, [`@anthropic-ai/sandbox-runtime`](https://github.com/anthropic-experimental/sandbox-runtime) **0.0.78** (`srt`, currently tested version), `bubblewrap`, `socat`, `ripgrep`, and `script` (util-linux)
 
@@ -290,9 +297,9 @@ It tells GPT to read the generated Notion `Terminal4GPTWeb Help` page first, the
 
 ---
 
-## Recommended ChatGPT Web setup
+## Recommended web-AI setup (ChatGPT reference)
 
-Terminal4GPTWeb is most useful when ChatGPT Web has the following connections.
+Terminal4GPTWeb is not tied to one web AI client. The configuration below uses **ChatGPT Web as the current reference workflow** because it is the most extensively documented here. Other clients can use the same control flow when they can read and edit the generated Notion page.
 
 ### 1. Notion — required
 
@@ -367,7 +374,7 @@ Keep recurring checks read-only where possible. Do not put credentials, sudo pas
 
 ---
 
-## How GPT / agents should operate
+## How web AI / agents should operate
 
 For reliable agent behavior, use a strict observe → act → observe loop:
 
@@ -474,9 +481,9 @@ t4g run
 
 ---
 
-## Using it from GPT Web
+## Using it from a web AI client
 
-Once the generated Notion page is visible to GPT through a Notion connector, the page becomes a terminal tool surface.
+Once the generated Notion page is readable and editable through a web AI client's Notion connector, the page becomes a **terminal and browser execution surface** for that client.
 
 A typical flow:
 
