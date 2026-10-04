@@ -94,6 +94,16 @@ class _FakeFullPage:
         return buffer.getvalue()
 
 
+def test_full_page_capture_returns_one_full_height_image():
+    controller = BrowserController(BrowserSettings(width=1280, height=720))
+    controller._page = _FakeFullPage(width=1280, height=1805)
+
+    screenshot = controller.capture_full_page()
+
+    with Image.open(BytesIO(screenshot)) as image:
+        assert image.size == (1280, 1805)
+
+
 def test_full_page_capture_is_split_into_viewport_height_tiles():
     controller = BrowserController(BrowserSettings(width=1280, height=720))
     controller._page = _FakeFullPage(width=1280, height=1500)

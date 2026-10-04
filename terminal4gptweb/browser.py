@@ -254,50 +254,22 @@ class BrowserController:
         self._last_observation = observation
         return observation
 
+    def capture_full_page(self) -> bytes:
+        """Capture one full-height PNG at viewport width.
+
+        Browser-native image documents are temporarily switched from Chrome's
+        fit-to-height viewer to fit-to-width so tall images do not contain
+        large side margins.
+        """
+        return self._capture_full_page_png()
+
     def capture_full_page_tiles(
         self,
         *,
         max_tiles: int = MAX_FULL_PAGE_TILES,
     ) -> list[BrowserCaptureTile]:
-        """Capture a full page and split it into viewport-height PNG tiles.
-
-        A single very tall image becomes tiny in Notion. Tiling keeps each
-        segment readable while preserving the full-page order.
-        """
-        self.start()
-        assert self._page is not None
-
-        marker_visible = False
-        direct_image_state: dict | None = None
-        try:
-            direct_image_state = self._prepare_direct_image_for_full_capture()
-            marker_visible = bool(
-                self._page.evaluate(
-                    """() => {
-                        const marker = document.getElementById('__nit_cursor_overlay__');
-                        if (!marker) return false;
-                        const wasVisible = marker.style.visibility !== 'hidden';
-                        marker.style.visibility = 'hidden';
-                        return wasVisible;
-                    }"""
-                )
-            )
-            png = self._page.screenshot(type="png", full_page=True, scale="css")
-        except Exception as exc:
-            raise BrowserError(f"Could not capture full page: {exc}") from exc
-        finally:
-            if marker_visible:
-                try:
-                    self._page.evaluate(
-                        """() => {
-                            const marker = document.getElementById('__nit_cursor_overlay__');
-                            if (marker) marker.style.visibility = 'visible';
-                        }"""
-                    )
-                except Exception:
-                    pass
-            if direct_image_state is not None:
-                self._restore_direct_image_after_full_capture(direct_image_state)
+        """Capture a full page and split it into viewport-height PNG tiles."""
+        png = self._capture_full_page_png()
 
         try:
             with Image.open(BytesIO(png)) as image:
@@ -332,6 +304,42 @@ class BrowserController:
         except Exception as exc:
             raise BrowserError(f"Could not split full-page screenshot: {exc}") from exc
 
+    def _capture_full_page_png(self) -> bytes:
+        self.start()
+        assert self._page is not None
+
+        marker_visible = False
+        direct_image_state: dict | None = None
+        try:
+            direct_image_state = self._prepare_direct_image_for_full_capture()
+            marker_visible = bool(
+                self._page.evaluate(
+                    """() => {
+                        const marker = document.getElementById('__nit_cursor_overlay__');
+                        if (!marker) return false;
+                        const wasVisible = marker.style.visibility !== 'hidden';
+                        marker.style.visibility = 'hidden';
+                        return wasVisible;
+                    }"""
+                )
+            )
+            return self._page.screenshot(type="png", full_page=True, scale="css")
+        except Exception as exc:
+            raise BrowserError(f"Could not capture full page: {exc}") from exc
+        finally:
+            if marker_visible:
+                try:
+                    self._page.evaluate(
+                        """() => {
+                            const marker = document.getElementById('__nit_cursor_overlay__');
+                            if (marker) marker.style.visibility = 'visible';
+                        }"""
+                    )
+                except Exception:
+                    pass
+            if direct_image_state is not None:
+                self._restore_direct_image_after_full_capture(direct_image_state)
+
     def _prepare_direct_image_for_full_capture(self) -> dict | None:
         """Expand a browser-native image document to a readable natural ratio."""
         assert self._page is not None
@@ -341,7 +349,7 @@ class BrowserController:
                 const img = document.querySelector('img');
                 if (!img || !img.naturalWidth || !img.naturalHeight) return null;
 
-                const renderWidth = Math.min(img.naturalWidth, window.innerWidth);
+                const renderWidth = window.innerWidth;
                 const renderHeight = Math.max(
                     1,
                     Math.round(img.naturalHeight * (renderWidth / img.naturalWidth))
@@ -506,7 +514,7 @@ def parse_browser_command(command: str) -> tuple[str, list[str]]:
     value = command.strip()
     if not value:
         raise BrowserError(
-            "Usage: :b <goto|shot|save|full|clear-saved|click|move|drag|scroll|type|key|back|reload> ..."
+            "Usage: :b <goto|shot|save|full|full-tiles|clear-saved|click|move|drag|scroll|type|key|back|reload> ..."
         )
     parts = value.split()
     return parts[0].lower(), parts[1:]
