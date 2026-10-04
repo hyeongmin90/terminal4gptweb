@@ -552,7 +552,7 @@ class NotionClient:
                 heading_payload("Browser Saved Snapshots"),
                 paragraph_payload(
                     "Temporary comparison captures. Use :b save [label] for the current viewport, "
-                    ":b full [label] for a long page split into readable tiles, and :b clear-saved to remove them."
+                    ":b full [label] for one full-width long screenshot, :b full-tiles [label] for optional tiles, and :b clear-saved to remove them."
                 ),
             ]
         })
@@ -588,7 +588,7 @@ class NotionClient:
                     heading_payload("Browser Saved Snapshots"),
                     paragraph_payload(
                         "Temporary comparison captures. Use :b save [label] for the current viewport, "
-                        ":b full [label] for a long page split into readable tiles, and :b clear-saved to remove them."
+                        ":b full [label] for one full-width long screenshot, :b full-tiles [label] for optional tiles, and :b clear-saved to remove them."
                     ),
                 ],
                 "position": {
@@ -1023,7 +1023,8 @@ def terminal_page_children(terminal_text: str, input_text: str) -> list[dict[str
         bulleted_payload("Browser open — :b goto https://example.com"),
         bulleted_payload("Browser screenshot — :b shot"),
         bulleted_payload("Save current browser view — :b save [label]"),
-        bulleted_payload("Save long page as readable tiles — :b full [label]"),
+        bulleted_payload("Save long page as one full-width image — :b full [label]"),
+        bulleted_payload("Optional tiled long-page capture — :b full-tiles [label]"),
         bulleted_payload("Clear saved browser captures — :b clear-saved"),
         bulleted_payload("Browser click — :b click <observation_id> <x> <y>"),
         paragraph_payload(
@@ -1093,7 +1094,8 @@ def help_page_children() -> list[dict[str, Any]]:
         bulleted_payload("Open URL — :b goto <url> (alias: :b open <url>)"),
         bulleted_payload("Fresh observation — :b shot"),
         bulleted_payload("Save current viewport for comparison — :b save [label]"),
-        bulleted_payload("Save a long page as viewport-height tiles — :b full [label]"),
+        bulleted_payload("Save a long page as one full-width image — :b full [label]"),
+        bulleted_payload("Optional viewport-height tiles — :b full-tiles [label]"),
         bulleted_payload("Clear temporary saved captures — :b clear-saved"),
         bulleted_payload("Move / hover — :b move <observation_id> <x> <y>"),
         bulleted_payload("Click — :b click <observation_id> <x> <y>"),
@@ -1112,8 +1114,9 @@ def help_page_children() -> list[dict[str, Any]]:
         bulleted_payload("Coordinate actions move/click/drag require the latest observation_id and reject stale IDs with STALE_OBSERVATION."),
         bulleted_payload("Scroll/type/key/navigation do not take an observation_id, but they still create a new observation; wait for it before the next action."),
         bulleted_payload("Mouse coordinates are viewport-relative CSS pixels. Browser Status scroll is page metadata; click coordinates remain relative to the visible viewport."),
-        bulleted_payload("The live Browser Screenshot stays viewport-only for coordinate accuracy. Use :b full [label] to save a long page as multiple readable tiles instead of one tiny full-page image."),
-        bulleted_payload("Use :b save [label] before navigating away when several page results need side-by-side comparison. Saved captures are temporary and are cleared on daemon restart or with :b clear-saved."),
+        bulleted_payload("The live Browser Screenshot stays viewport-only for coordinate accuracy. Use :b full [label] for a single full-height screenshot fitted to viewport width without browser image-viewer side margins."),
+        bulleted_payload("If a tiled view is explicitly useful, use :b full-tiles [label]."),
+        bulleted_payload("Use :b save [label] before navigating away when several page results need comparison. Saved captures are temporary and are cleared on daemon restart or with :b clear-saved."),
         bulleted_payload("For hover UI, send :b move, inspect the newly rendered hover state, then click using the new observation_id."),
         heading_payload("Browser Focus and Keys"),
         paragraph_payload(
