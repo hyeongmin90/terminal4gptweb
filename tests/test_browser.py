@@ -1,4 +1,7 @@
+from io import BytesIO
+
 import pytest
+from PIL import Image
 
 from terminal4gptweb.browser import BrowserController, BrowserError, _is_navigation_race, parse_browser_command
 from terminal4gptweb.config import BrowserSettings
@@ -71,3 +74,42 @@ def test_navigation_race_detection():
     assert _is_navigation_race(RuntimeError("Execution context was destroyed, most likely because of a navigation"))
     assert _is_navigation_race(RuntimeError("Frame was detached"))
     assert not _is_navigation_race(RuntimeError("selector timeout"))
+
+
+class _FakeFullPage:
+    def __init__(self, *, width: int, height: int):
+        self.width = width
+        self.height = height
+
+    def evaluate(self, script):
+        return False
+
+    def screenshot(self, *, type, full_page, scale):
+        assert type == "png"
+        assert full_page is True
+        assert scale == "css"
+        image = Image.new("RGB", (self.width, self.height))
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+
+def test_full_page_capture_is_split_into_viewport_height_tiles():
+    controller = BrowserController(BrowserSettings(width=1280, height=720))
+    controller._page = _FakeFullPage(width=1280, height=1500)
+
+    tiles = controller.capture_full_page_tiles()
+
+    assert len(tiles) == 3
+    assert [tile.y for tile in tiles] == [0, 720, 1440]
+    assert [tile.height for tile in tiles] == [720, 720, 60]
+    assert [tile.index for tile in tiles] == [1, 2, 3]
+    assert all(tile.total == 3 for tile in tiles)
+
+
+def test_full_page_capture_rejects_too_many_tiles():
+    controller = BrowserController(BrowserSettings(width=20, height=10))
+    controller._page = _FakeFullPage(width=20, height=210)
+
+    with pytest.raises(BrowserError, match="safety limit"):
+        controller.capture_full_page_tiles(max_tiles=20)

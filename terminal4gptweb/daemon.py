@@ -6,7 +6,7 @@ import signal
 import time
 from pathlib import Path
 
-from .browser import BrowserController, BrowserError, BrowserObservation
+from .browser import BrowserController, BrowserError, BrowserObservation, parse_browser_command
 from .config import AppConfig, DEFAULT_CONFIG_PATH, write_config
 from .notion import NotionClient, NotionError
 from .protocol import InputAction, InputKind, extract_submission
@@ -185,6 +185,34 @@ class TerminalDaemon:
             f"viewport: {self.config.browser.width}x{self.config.browser.height}\n"
         )
         try:
+            name, args = parse_browser_command(command)
+            if name == "save":
+                self._save_browser_view(args)
+                return
+            if name == "full":
+                self._save_browser_full_page(args)
+                return
+            if name == "clear-saved":
+                if args:
+                    raise BrowserError("Usage: :b clear-saved")
+                removed = self.notion.clear_browser_saved_images(
+                    page_id=self.config.notion.page_id
+                )
+                observation = self.browser.last_observation
+                if observation is None:
+                    self._set_browser_status(
+                        self._browser_idle_status()
+                        + f"saved_cleared: {removed}\n"
+                    )
+                else:
+                    self._set_browser_status(
+                        self._browser_ready_status(
+                            observation,
+                            extra_lines=[f"saved_cleared: {removed}"],
+                        )
+                    )
+                return
+
             observation = self.browser.execute(command)
             self._publish_browser_observation(observation)
         except Exception as exc:
@@ -199,7 +227,70 @@ class TerminalDaemon:
                 print(f"[notion] browser failure status update failed: {status_exc}")
             raise
 
-    def _publish_browser_observation(self, observation: BrowserObservation) -> None:
+    def _save_browser_view(self, args: list[str]) -> None:
+        observation = self.browser.last_observation
+        if observation is None:
+            raise BrowserError("No browser observation exists yet. Run :b shot first.")
+        label = self._browser_capture_label(args, observation)
+        self.notion.append_browser_saved_images(
+            page_id=self.config.notion.page_id,
+            images=[
+                (
+                    observation.screenshot,
+                    f"{label} · {observation.observation_id} · viewport",
+                )
+            ],
+        )
+        self._set_browser_status(
+            self._browser_ready_status(
+                observation,
+                extra_lines=[f"saved_view: {label}"],
+            )
+        )
+
+    def _save_browser_full_page(self, args: list[str]) -> None:
+        previous = self.browser.last_observation
+        if previous is None:
+            raise BrowserError("No browser observation exists yet. Run :b shot first.")
+        label = self._browser_capture_label(args, previous)
+        tiles = self.browser.capture_full_page_tiles()
+        images = [
+            (
+                tile.screenshot,
+                f"{label} · full {tile.index}/{tile.total} · y={tile.y}",
+            )
+            for tile in tiles
+        ]
+        self.notion.append_browser_saved_images(
+            page_id=self.config.notion.page_id,
+            images=images,
+        )
+        observation = self.browser.observe()
+        self._publish_browser_observation(
+            observation,
+            extra_lines=[
+                f"saved_full: {label}",
+                f"saved_tiles: {len(tiles)}",
+            ],
+        )
+
+    @staticmethod
+    def _browser_capture_label(
+        args: list[str],
+        observation: BrowserObservation,
+    ) -> str:
+        label = " ".join(args).strip()
+        if not label:
+            label = observation.title.strip() or observation.url.strip() or observation.observation_id
+        label = " ".join(label.split())
+        return label[:120]
+
+    def _publish_browser_observation(
+        self,
+        observation: BrowserObservation,
+        *,
+        extra_lines: list[str] | None = None,
+    ) -> None:
         new_image_id = self.notion.replace_browser_image(
             page_id=self.config.notion.page_id,
             old_image_block_id=self.config.notion.browser_image_block_id,
@@ -223,6 +314,40 @@ class TerminalDaemon:
             vision_page = self.config.notion.browser_vision_page_url
 
         self._set_browser_status(
+            self._browser_ready_status(
+                observation,
+                cursor=cursor,
+                vision_status=vision_status,
+                vision_page=vision_page,
+                extra_lines=extra_lines,
+            )
+        )
+
+    def _browser_ready_status(
+        self,
+        observation: BrowserObservation,
+        *,
+        cursor: str | None = None,
+        vision_status: str | None = None,
+        vision_page: str | None = None,
+        extra_lines: list[str] | None = None,
+    ) -> str:
+        if cursor is None:
+            cursor = "none"
+            if observation.cursor_x is not None and observation.cursor_y is not None:
+                cursor = f"{observation.cursor_x:g},{observation.cursor_y:g}"
+        if vision_status is None:
+            vision_status = "disabled"
+            if self.config.browser.vision_enabled:
+                vision_status = f"ready (jpeg quality {observation.vision_quality})"
+        if vision_page is None:
+            vision_page = (
+                self.config.notion.browser_vision_page_url
+                if self.config.browser.vision_enabled
+                else ""
+            )
+
+        text = (
             "status: ready\n"
             f"observation_id: {observation.observation_id}\n"
             f"url: {observation.url}\n"
@@ -234,6 +359,9 @@ class TerminalDaemon:
             f"vision_page_url: {vision_page}\n"
             f"created_at: {observation.created_at}\n"
         )
+        if extra_lines:
+            text += "".join(f"{line}\n" for line in extra_lines)
+        return text
 
     def _publish_browser_vision(self, observation: BrowserObservation) -> None:
         if not self.config.browser.vision_enabled:
@@ -290,6 +418,7 @@ class TerminalDaemon:
     def _reset_browser_surface(self) -> None:
         try:
             removed = self.notion.clear_browser_images(page_id=self.config.notion.page_id)
+            self.notion.clear_browser_saved_images(page_id=self.config.notion.page_id)
             if removed or self.config.notion.browser_image_block_id:
                 self.config.notion.browser_image_block_id = ""
                 write_config(self.config, self.config_path)
@@ -343,13 +472,13 @@ class TerminalDaemon:
             image_block_id=self.config.notion.browser_image_block_id,
             status_text=self._browser_idle_status(),
         )
-        if not blocks.recreated:
-            return
+        if blocks.recreated:
+            self.config.notion.browser_status_block_id = blocks.status_block_id
+            self.config.notion.browser_image_block_id = blocks.image_block_id
+            write_config(self.config, self.config_path)
+            print("[notion] browser status/screenshot surface created or repaired.")
 
-        self.config.notion.browser_status_block_id = blocks.status_block_id
-        self.config.notion.browser_image_block_id = blocks.image_block_id
-        write_config(self.config, self.config_path)
-        print("[notion] browser status/screenshot surface created or repaired.")
+        self.notion.ensure_browser_saved_section(page_id=self.config.notion.page_id)
 
     def _reset_input(self) -> None:
         self._set_input(self.input_prompt)

@@ -341,6 +341,9 @@ Current browser subcommands:
 goto
 open
 shot
+save
+full
+clear-saved
 click
 move
 drag
@@ -394,6 +397,50 @@ Useful when:
 - animations/loading completed after the previous action;
 - current page state is uncertain after a failure;
 - you only need a fresh Screenshot/Vision payload.
+
+---
+
+## 10A. `:b save [label]` — keep the current viewport
+
+Copy the latest viewport screenshot into **Browser Saved Snapshots** so it remains visible after navigation or later browser actions.
+
+```text
+:b save
+:b save result A
+```
+
+- An existing observation is required; run `:b shot` first if needed.
+- The label is optional. The current page title/URL is used when omitted.
+- The live Browser Screenshot and current observation_id are not changed.
+- Saved captures are temporary and are cleared by `:b clear-saved` or daemon restart.
+
+---
+
+## 10B. `:b full [label]` — save a long page as tiles
+
+Capture the whole document, then split the full-page screenshot into **viewport-height PNG tiles** under Browser Saved Snapshots.
+
+```text
+:b full
+:b full long report
+```
+
+Very tall single images become tiny when Notion scales them to page width. Tiling preserves readable detail while keeping the existing live viewport screenshot unchanged for coordinate work.
+
+- Up to 20 tiles are allowed.
+- Larger pages are rejected by the safety limit; scroll to selected sections and use `:b save` instead.
+- A fresh live observation is published after the full capture, so use the new observation_id for subsequent coordinate actions.
+- Full-page tiles are for inspection/comparison, not click coordinates.
+
+---
+
+## 10C. `:b clear-saved` — remove temporary captures
+
+```text
+:b clear-saved
+```
+
+Remove all saved viewport/full-page tiles without affecting the live Browser Screenshot.
 
 ---
 
@@ -960,6 +1007,9 @@ Default:
 | --- | --- |
 | navigate | `:b goto <url>` / `:b open <url>` |
 | observe | `:b shot` |
+| save current viewport | `:b save [label]` |
+| save long page as tiles | `:b full [label]` |
+| clear saved captures | `:b clear-saved` |
 | move/hover | `:b move <obs> <x> <y>` |
 | click | `:b click <obs> <x> <y>` |
 | drag | `:b drag <obs> <x1> <y1> <x2> <y2>` |

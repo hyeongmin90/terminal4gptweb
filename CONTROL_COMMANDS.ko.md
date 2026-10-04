@@ -391,6 +391,9 @@ resize 시:
 goto
 open
 shot
+save
+full
+clear-saved
 click
 move
 drag
@@ -468,6 +471,50 @@ URL 인자는 하나만 받을 수 있습니다.
 ```text
 :b shot
 ```
+
+---
+
+## 10A. `:b save [label]` — 현재 화면 임시 저장
+
+현재 최신 viewport screenshot을 **Browser Saved Snapshots** 영역에 복사해 둡니다. 이후 다른 URL로 이동하거나 화면이 바뀌어도 저장본은 남아 있어 여러 결과를 한 페이지에서 비교할 수 있습니다.
+
+```text
+:b save
+:b save 검색 결과 A
+```
+
+- 먼저 `:b shot` 또는 다른 browser action으로 observation이 하나 있어야 합니다.
+- label은 선택 사항입니다. 생략하면 현재 page title/URL을 사용합니다.
+- live Browser Screenshot과 observation_id는 바뀌지 않습니다.
+- 저장본은 임시 데이터이며 `:b clear-saved` 또는 daemon 재시작 시 삭제됩니다.
+
+---
+
+## 10B. `:b full [label]` — 긴 페이지를 tile로 저장
+
+현재 document 전체를 full-page screenshot으로 캡처한 뒤 **현재 viewport 높이 단위 PNG 여러 장**으로 잘라 Browser Saved Snapshots에 저장합니다.
+
+```text
+:b full
+:b full 긴 리포트
+```
+
+한 장의 세로로 매우 긴 이미지는 Notion에서 폭에 맞춰 축소되면서 글자와 UI가 지나치게 작아질 수 있습니다. `:b full`은 이 문제를 피하기 위해 예를 들어 1280×5000 페이지를 1280×720 정도의 여러 tile로 나누어 순서대로 보관합니다.
+
+- 최대 20 tile까지 허용합니다.
+- 20장을 넘는 페이지는 안전 제한으로 거부하며 필요한 구간을 scroll한 뒤 `:b save`로 선택 저장할 수 있습니다.
+- full capture 뒤 현재 viewport를 다시 observation으로 게시하므로 새로운 observation_id를 사용해야 합니다.
+- full-page tile은 비교/판독용입니다. tile 좌표를 click/move에 직접 사용하지 말고 live Browser Screenshot 좌표를 사용합니다.
+
+---
+
+## 10C. `:b clear-saved` — 임시 저장본 삭제
+
+```text
+:b clear-saved
+```
+
+Browser Saved Snapshots에 쌓인 viewport/full-page tile 이미지를 모두 제거합니다. live Browser Screenshot에는 영향을 주지 않습니다.
 
 ---
 
@@ -1161,6 +1208,9 @@ t4g daemon --help
 | --- | --- |
 | 이동 | `:b goto <url>` / `:b open <url>` |
 | 관찰 | `:b shot` |
+| 현재 화면 임시 저장 | `:b save [label]` |
+| 긴 페이지 tile 저장 | `:b full [label]` |
+| 임시 저장본 삭제 | `:b clear-saved` |
 | move/hover | `:b move <obs> <x> <y>` |
 | click | `:b click <obs> <x> <y>` |
 | drag | `:b drag <obs> <x1> <y1> <x2> <y2>` |

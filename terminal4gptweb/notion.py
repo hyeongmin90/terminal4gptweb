@@ -549,6 +549,11 @@ class NotionClient:
                     "Latest Playwright viewport screenshot for GPT Vision. "
                     "The image is replaced after each browser action."
                 ),
+                heading_payload("Browser Saved Snapshots"),
+                paragraph_payload(
+                    "Temporary comparison captures. Use :b save [label] for the current viewport, "
+                    ":b full [label] for a long page split into readable tiles, and :b clear-saved to remove them."
+                ),
             ]
         })
         code_blocks = [item for item in response.get("results", []) if item.get("type") == "code"]
@@ -559,6 +564,91 @@ class NotionClient:
             image_block_id="",
             recreated=True,
         )
+
+    def ensure_browser_saved_section(self, *, page_id: str) -> str:
+        children = self.get_block_children(page_id)
+        anchor_id = find_browser_saved_anchor(children)
+        if anchor_id:
+            return anchor_id
+
+        anchors = find_browser_anchors(children)
+        if anchors is None:
+            raise NotionError("Browser section anchors are missing.")
+
+        live_images = browser_screenshot_image_ids(
+            children,
+            anchor_id=anchors.screenshot_anchor_id,
+        )
+        after_id = live_images[-1] if live_images else anchors.screenshot_anchor_id
+        response = self._request(
+            "PATCH",
+            f"/blocks/{page_id}/children",
+            json={
+                "children": [
+                    heading_payload("Browser Saved Snapshots"),
+                    paragraph_payload(
+                        "Temporary comparison captures. Use :b save [label] for the current viewport, "
+                        ":b full [label] for a long page split into readable tiles, and :b clear-saved to remove them."
+                    ),
+                ],
+                "position": {
+                    "type": "after_block",
+                    "after_block": {"id": after_id},
+                },
+            },
+        )
+        results = response.get("results", [])
+        for item in results:
+            if item.get("type") == "paragraph" and item.get("id"):
+                return str(item["id"])
+        raise NotionError("Notion did not return the Browser Saved Snapshots anchor.")
+
+    def append_browser_saved_images(
+        self,
+        *,
+        page_id: str,
+        images: list[tuple[bytes, str]],
+    ) -> list[str]:
+        if not images:
+            return []
+
+        anchor_id = self.ensure_browser_saved_section(page_id=page_id)
+        payloads: list[dict[str, Any]] = []
+        for index, (image_bytes, caption) in enumerate(images, start=1):
+            file_upload_id = self.upload_file(
+                filename=f"terminal4gptweb-saved-{index}.png",
+                data=image_bytes,
+                content_type="image/png",
+            )
+            payloads.append(image_block_payload(file_upload_id, caption=caption))
+
+        response = self._request(
+            "PATCH",
+            f"/blocks/{page_id}/children",
+            json={
+                "children": payloads,
+                "position": {
+                    "type": "after_block",
+                    "after_block": {"id": anchor_id},
+                },
+            },
+        )
+        return [
+            str(item["id"])
+            for item in response.get("results", [])
+            if item.get("type") == "image" and item.get("id")
+        ]
+
+    def clear_browser_saved_images(self, *, page_id: str) -> int:
+        children = self.get_block_children(page_id)
+        anchor_id = find_browser_saved_anchor(children)
+        if not anchor_id:
+            return 0
+
+        image_ids = browser_screenshot_image_ids(children, anchor_id=anchor_id)
+        for block_id in image_ids:
+            self.archive_block(block_id)
+        return len(image_ids)
 
     def clear_browser_images(self, *, page_id: str) -> bool:
         children = self.get_block_children(page_id)
@@ -796,6 +886,21 @@ def find_runtime_anchors(children: list[dict[str, Any]]) -> RuntimeAnchors | Non
     return None
 
 
+def find_browser_saved_anchor(children: list[dict[str, Any]]) -> str | None:
+    section = False
+    for block in children:
+        if block.get("archived") or block.get("in_trash"):
+            continue
+        if block.get("type") == "heading_2":
+            section = block_plain_text(block).strip() == "Browser Saved Snapshots"
+            continue
+        if section and block.get("type") == "paragraph":
+            return str(block.get("id", "")) or None
+        if section and block.get("type") in {"heading_2", "child_page"}:
+            return None
+    return None
+
+
 def find_browser_anchors(children: list[dict[str, Any]]) -> BrowserAnchors | None:
     status_anchor: str | None = None
     screenshot_anchor: str | None = None
@@ -917,6 +1022,9 @@ def terminal_page_children(terminal_text: str, input_text: str) -> list[dict[str
         bulleted_payload("Ctrl key — :c C"),
         bulleted_payload("Browser open — :b goto https://example.com"),
         bulleted_payload("Browser screenshot — :b shot"),
+        bulleted_payload("Save current browser view — :b save [label]"),
+        bulleted_payload("Save long page as readable tiles — :b full [label]"),
+        bulleted_payload("Clear saved browser captures — :b clear-saved"),
         bulleted_payload("Browser click — :b click <observation_id> <x> <y>"),
         paragraph_payload(
             "Open the Terminal4GPTWeb Help child page for agent instructions, full command reference, examples, and recovery."
@@ -984,6 +1092,9 @@ def help_page_children() -> list[dict[str, Any]]:
         heading_payload("Browser Commands"),
         bulleted_payload("Open URL — :b goto <url> (alias: :b open <url>)"),
         bulleted_payload("Fresh observation — :b shot"),
+        bulleted_payload("Save current viewport for comparison — :b save [label]"),
+        bulleted_payload("Save a long page as viewport-height tiles — :b full [label]"),
+        bulleted_payload("Clear temporary saved captures — :b clear-saved"),
         bulleted_payload("Move / hover — :b move <observation_id> <x> <y>"),
         bulleted_payload("Click — :b click <observation_id> <x> <y>"),
         bulleted_payload("Drag — :b drag <observation_id> <x1> <y1> <x2> <y2>"),
@@ -1001,7 +1112,8 @@ def help_page_children() -> list[dict[str, Any]]:
         bulleted_payload("Coordinate actions move/click/drag require the latest observation_id and reject stale IDs with STALE_OBSERVATION."),
         bulleted_payload("Scroll/type/key/navigation do not take an observation_id, but they still create a new observation; wait for it before the next action."),
         bulleted_payload("Mouse coordinates are viewport-relative CSS pixels. Browser Status scroll is page metadata; click coordinates remain relative to the visible viewport."),
-        bulleted_payload("Screenshots are viewport-only. Scroll first to reach off-screen content, then use the new observation for coordinates."),
+        bulleted_payload("The live Browser Screenshot stays viewport-only for coordinate accuracy. Use :b full [label] to save a long page as multiple readable tiles instead of one tiny full-page image."),
+        bulleted_payload("Use :b save [label] before navigating away when several page results need side-by-side comparison. Saved captures are temporary and are cleared on daemon restart or with :b clear-saved."),
         bulleted_payload("For hover UI, send :b move, inspect the newly rendered hover state, then click using the new observation_id."),
         heading_payload("Browser Focus and Keys"),
         paragraph_payload(
