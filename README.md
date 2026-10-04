@@ -562,11 +562,18 @@ Browser Status
 Browser Screenshot
   최신 viewport PNG
 
+Browser Saved Snapshots
+  비교용으로 임시 저장한 viewport / full-page tile
+
 Browser Vision Payload
   압축 JPEG + 동일 observation_id
 ```
 
-좌표 action은 최신 `observation_id`를 요구하므로 화면이 바뀐 뒤 이전 screenshot 좌표를 잘못 적용하는 것을 막습니다. Browser 명령의 전체 문법, 좌표 규칙, focus/keyboard 동작, hover 흐름, 실패 복구, 현재 제한사항은 **[CONTROL_COMMANDS.ko.md](./CONTROL_COMMANDS.ko.md)**에 정리했습니다.
+좌표 action은 최신 `observation_id`를 요구하므로 화면이 바뀐 뒤 이전 screenshot 좌표를 잘못 적용하는 것을 막습니다.
+
+여러 페이지 결과를 비교해야 할 때는 이동하기 전에 `:b save [label]`로 현재 viewport를 **Browser Saved Snapshots**에 임시 보관할 수 있습니다. 세로로 긴 페이지는 `:b full [label]`을 사용하면 한 장의 매우 긴 이미지를 축소해서 보여주는 대신 현재 viewport 높이 단위의 여러 PNG tile로 나누어 저장합니다. 저장본은 `:b clear-saved` 또는 daemon 재시작 시 정리됩니다. live **Browser Screenshot**은 좌표 정확성을 위해 기존처럼 viewport 한 장만 유지합니다.
+
+Browser 명령의 전체 문법, 좌표 규칙, focus/keyboard 동작, hover 흐름, 실패 복구, 현재 제한사항은 **[CONTROL_COMMANDS.ko.md](./CONTROL_COMMANDS.ko.md)**에 정리했습니다.
 
 ---
 
