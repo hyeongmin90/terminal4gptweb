@@ -9,6 +9,7 @@ from terminal4gptweb.notion import (
     block_is_usable_code,
     browser_screenshot_image_ids,
     find_browser_anchors,
+    find_browser_saved_anchor,
     find_runtime_anchors,
     help_page_children,
     parse_page_id,
@@ -193,6 +194,17 @@ def test_find_browser_anchors():
     assert find_browser_anchors(children) == BrowserAnchors("a-browser", "a-shot")
 
 
+def test_find_browser_saved_anchor():
+    children = [
+        {"id": "heading", "type": "heading_2", "heading_2": {"rich_text": _rich("Browser Saved Snapshots")}},
+        {"id": "anchor", "type": "paragraph", "paragraph": {"rich_text": _rich("temporary captures")}},
+        {"id": "image-1", "type": "image", "image": {}},
+        {"id": "next", "type": "heading_2", "heading_2": {"rich_text": _rich("Other")}},
+    ]
+    assert find_browser_saved_anchor(children) == "anchor"
+    assert browser_screenshot_image_ids(children, anchor_id="anchor") == ["image-1"]
+
+
 def test_browser_screenshot_image_ids_stop_at_next_section():
     children = [
         {"id": "anchor", "type": "paragraph", "paragraph": {"rich_text": _rich("latest")}},
@@ -216,6 +228,8 @@ def test_terminal_page_children_are_compact():
     assert "Input is executed only when the text ends with a newline" in text
     assert "Quick Commands" in text
     assert "Browser open" in text
+    assert "Save current browser view" in text
+    assert "Save long page as readable tiles" in text
     assert "Common TUI recipes" not in text
     assert "Key names and aliases" not in text
 
@@ -233,6 +247,9 @@ def test_help_page_contains_agent_commands_and_recovery():
     assert "command stays visible in Input" in text
     assert ":b click <observation_id> <x> <y>" in text
     assert "Browser Control Loop" in text
+    assert ":b save [label]" in text
+    assert ":b full [label]" in text
+    assert ":b clear-saved" in text
     assert "STALE_OBSERVATION" in text
     assert "click field → wait for ready → type" in text
     assert "do not append :k ENTER to ordinary text" in text
