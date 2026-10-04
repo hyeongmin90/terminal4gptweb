@@ -426,7 +426,7 @@ Capture the entire document as **one full-height PNG fitted to the browser viewp
 :b full long report
 ```
 
-Normal web pages use the Playwright viewport width for the full-page screenshot. When a PNG/JPEG is opened directly in Chrome, Terminal4GPTWeb temporarily disables the browser's fit-to-height image view and switches it to **fit-to-width**, removing the large side margins that otherwise appear on tall images.
+Normal web pages use the Playwright viewport width for the full-page screenshot. When an image is opened directly in Chrome, Terminal4GPTWeb bypasses the browser's fit-to-height viewer and extracts the `<img>` element's **natural pixels** directly. Images wider than the configured viewport are downscaled proportionally; viewer side margins are never part of the saved image.
 
 - The long page is not split into multiple images.
 - A fresh live observation is published after the full capture, so use the new observation_id for subsequent coordinate actions.
