@@ -268,7 +268,9 @@ class BrowserController:
         assert self._page is not None
 
         marker_visible = False
+        direct_image_state: dict | None = None
         try:
+            direct_image_state = self._prepare_direct_image_for_full_capture()
             marker_visible = bool(
                 self._page.evaluate(
                     """() => {
@@ -294,6 +296,8 @@ class BrowserController:
                     )
                 except Exception:
                     pass
+            if direct_image_state is not None:
+                self._restore_direct_image_after_full_capture(direct_image_state)
 
         try:
             with Image.open(BytesIO(png)) as image:
@@ -327,6 +331,81 @@ class BrowserController:
             raise
         except Exception as exc:
             raise BrowserError(f"Could not split full-page screenshot: {exc}") from exc
+
+    def _prepare_direct_image_for_full_capture(self) -> dict | None:
+        """Expand a browser-native image document to a readable natural ratio."""
+        assert self._page is not None
+        state = self._page.evaluate(
+            """() => {
+                if (!String(document.contentType || '').startsWith('image/')) return null;
+                const img = document.querySelector('img');
+                if (!img || !img.naturalWidth || !img.naturalHeight) return null;
+
+                const renderWidth = Math.min(img.naturalWidth, window.innerWidth);
+                const renderHeight = Math.max(
+                    1,
+                    Math.round(img.naturalHeight * (renderWidth / img.naturalWidth))
+                );
+                const state = {
+                    imgStyle: img.getAttribute('style'),
+                    bodyStyle: document.body ? document.body.getAttribute('style') : null,
+                    htmlStyle: document.documentElement.getAttribute('style'),
+                };
+
+                Object.assign(document.documentElement.style, {
+                    height: 'auto',
+                    minHeight: '0',
+                    overflow: 'visible',
+                });
+                if (document.body) {
+                    Object.assign(document.body.style, {
+                        margin: '0',
+                        padding: '0',
+                        display: 'block',
+                        width: renderWidth + 'px',
+                        height: renderHeight + 'px',
+                        minHeight: '0',
+                        overflow: 'visible',
+                    });
+                }
+                Object.assign(img.style, {
+                    display: 'block',
+                    position: 'static',
+                    margin: '0',
+                    padding: '0',
+                    width: renderWidth + 'px',
+                    height: renderHeight + 'px',
+                    maxWidth: 'none',
+                    maxHeight: 'none',
+                    objectFit: 'fill',
+                    cursor: 'default',
+                });
+                return state;
+            }"""
+        )
+        return state if isinstance(state, dict) else None
+
+    def _restore_direct_image_after_full_capture(self, state: dict) -> None:
+        assert self._page is not None
+        try:
+            self._page.evaluate(
+                """(state) => {
+                    const restore = (el, value) => {
+                        if (!el) return;
+                        if (value === null || value === undefined) {
+                            el.removeAttribute('style');
+                        } else {
+                            el.setAttribute('style', value);
+                        }
+                    };
+                    restore(document.querySelector('img'), state.imgStyle);
+                    restore(document.body, state.bodyStyle);
+                    restore(document.documentElement, state.htmlStyle);
+                }""",
+                state,
+            )
+        except Exception:
+            pass
 
     def _capture_vision_base64(self) -> tuple[str, int]:
         if not self.settings.vision_enabled:
