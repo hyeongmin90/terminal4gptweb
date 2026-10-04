@@ -563,7 +563,7 @@ Browser Vision Payload
 
 Coordinate actions are guarded by the current `observation_id`, preventing old screenshot coordinates from being applied after the page changes.
 
-Before navigating away from a result you want to compare, use `:b save [label]` to keep the current viewport under **Browser Saved Snapshots**. For a vertically long page, `:b full [label]` saves **one full-height screenshot fitted to the viewport width**. Browser-native PNG/JPEG documents are switched from fit-to-height to fit-to-width during capture so the image has no large side margins. The older tiled view remains available as `:b full-tiles [label]` when explicitly useful. Use `:b clear-saved` to remove temporary captures; they are also cleared on daemon restart. The live **Browser Screenshot** remains a single viewport image so coordinate reasoning stays exact.
+Before navigating away from a result you want to compare, use `:b save [label]` to keep the current viewport under **Browser Saved Snapshots**. For a vertically long page, `:b full [label]` saves **one full-height screenshot fitted to the viewport width**. Browser-native image documents bypass Chrome's fit-to-height viewer and use the image's natural pixels directly, so viewer side margins are not captured. The older tiled view remains available as `:b full-tiles [label]` when explicitly useful. Use `:b clear-saved` to remove temporary captures; they are also cleared on daemon restart. The live **Browser Screenshot** remains a single viewport image so coordinate reasoning stays exact.
 
 The full browser command syntax, coordinate rules, focus/keyboard behavior, hover workflow, failure recovery and current limitations are all in **[CONTROL_COMMANDS.md](./CONTROL_COMMANDS.md)**.
 
