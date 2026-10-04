@@ -3,12 +3,28 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
+from math import ceil
+
+from PIL import Image
 
 from .config import BrowserSettings
 
 
 class BrowserError(RuntimeError):
     pass
+
+
+MAX_FULL_PAGE_TILES = 20
+
+
+@dataclass(slots=True)
+class BrowserCaptureTile:
+    index: int
+    total: int
+    y: int
+    height: int
+    screenshot: bytes
 
 
 @dataclass(slots=True)
@@ -39,6 +55,7 @@ class BrowserController:
         self._page = None
         self._counter = 0
         self._observation_id = ""
+        self._last_observation: BrowserObservation | None = None
         self._cursor_x: float | None = None
         self._cursor_y: float | None = None
 
@@ -49,6 +66,10 @@ class BrowserController:
     @property
     def observation_id(self) -> str:
         return self._observation_id
+
+    @property
+    def last_observation(self) -> BrowserObservation | None:
+        return self._last_observation
 
     def start(self) -> None:
         if self.started:
@@ -215,7 +236,7 @@ class BrowserController:
         stamp = datetime.now(timezone.utc)
         self._observation_id = f"obs_{stamp.strftime('%Y%m%dT%H%M%SZ')}_{self._counter:04d}"
 
-        return BrowserObservation(
+        observation = BrowserObservation(
             observation_id=self._observation_id,
             screenshot=png,
             url=url,
@@ -230,6 +251,82 @@ class BrowserController:
             vision_base64=vision_base64,
             vision_quality=vision_quality,
         )
+        self._last_observation = observation
+        return observation
+
+    def capture_full_page_tiles(
+        self,
+        *,
+        max_tiles: int = MAX_FULL_PAGE_TILES,
+    ) -> list[BrowserCaptureTile]:
+        """Capture a full page and split it into viewport-height PNG tiles.
+
+        A single very tall image becomes tiny in Notion. Tiling keeps each
+        segment readable while preserving the full-page order.
+        """
+        self.start()
+        assert self._page is not None
+
+        marker_visible = False
+        try:
+            marker_visible = bool(
+                self._page.evaluate(
+                    """() => {
+                        const marker = document.getElementById('__nit_cursor_overlay__');
+                        if (!marker) return false;
+                        const wasVisible = marker.style.visibility !== 'hidden';
+                        marker.style.visibility = 'hidden';
+                        return wasVisible;
+                    }"""
+                )
+            )
+            png = self._page.screenshot(type="png", full_page=True, scale="css")
+        except Exception as exc:
+            raise BrowserError(f"Could not capture full page: {exc}") from exc
+        finally:
+            if marker_visible:
+                try:
+                    self._page.evaluate(
+                        """() => {
+                            const marker = document.getElementById('__nit_cursor_overlay__');
+                            if (marker) marker.style.visibility = 'visible';
+                        }"""
+                    )
+                except Exception:
+                    pass
+
+        try:
+            with Image.open(BytesIO(png)) as image:
+                width, full_height = image.size
+                tile_height = max(1, self.settings.height)
+                total = max(1, ceil(full_height / tile_height))
+                if total > max_tiles:
+                    raise BrowserError(
+                        f"Full page needs {total} tiles, exceeding the safety limit of {max_tiles}. "
+                        "Use :b scroll and :b save for selected sections instead."
+                    )
+
+                tiles: list[BrowserCaptureTile] = []
+                for index in range(total):
+                    y = index * tile_height
+                    bottom = min(y + tile_height, full_height)
+                    crop = image.crop((0, y, width, bottom))
+                    buffer = BytesIO()
+                    crop.save(buffer, format="PNG")
+                    tiles.append(
+                        BrowserCaptureTile(
+                            index=index + 1,
+                            total=total,
+                            y=y,
+                            height=bottom - y,
+                            screenshot=buffer.getvalue(),
+                        )
+                    )
+                return tiles
+        except BrowserError:
+            raise
+        except Exception as exc:
+            raise BrowserError(f"Could not split full-page screenshot: {exc}") from exc
 
     def _capture_vision_base64(self) -> tuple[str, int]:
         if not self.settings.vision_enabled:
@@ -330,7 +427,7 @@ def parse_browser_command(command: str) -> tuple[str, list[str]]:
     value = command.strip()
     if not value:
         raise BrowserError(
-            "Usage: :b <goto|shot|click|move|drag|scroll|type|key|back|reload> ..."
+            "Usage: :b <goto|shot|save|full|clear-saved|click|move|drag|scroll|type|key|back|reload> ..."
         )
     parts = value.split()
     return parts[0].lower(), parts[1:]
