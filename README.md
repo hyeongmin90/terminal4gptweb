@@ -571,7 +571,7 @@ Browser Vision Payload
 
 좌표 action은 최신 `observation_id`를 요구하므로 화면이 바뀐 뒤 이전 screenshot 좌표를 잘못 적용하는 것을 막습니다.
 
-여러 페이지 결과를 비교해야 할 때는 이동하기 전에 `:b save [label]`로 현재 viewport를 **Browser Saved Snapshots**에 임시 보관할 수 있습니다. 세로로 긴 페이지는 `:b full [label]`로 **가로를 viewport 폭에 맞춘 한 장짜리 전체 세로 이미지**를 저장합니다. Chrome에서 PNG/JPEG를 직접 연 경우에도 fit-to-height를 풀고 fit-to-width로 캡처해 좌우 여백이 생기지 않도록 합니다. 필요할 때만 `:b full-tiles [label]`로 기존 tile 방식을 사용할 수 있습니다. 저장본은 `:b clear-saved` 또는 daemon 재시작 시 정리됩니다. live **Browser Screenshot**은 좌표 정확성을 위해 기존처럼 viewport 한 장만 유지합니다.
+여러 페이지 결과를 비교해야 할 때는 이동하기 전에 `:b save [label]`로 현재 viewport를 **Browser Saved Snapshots**에 임시 보관할 수 있습니다. 세로로 긴 페이지는 `:b full [label]`로 **가로를 viewport 폭에 맞춘 한 장짜리 전체 세로 이미지**를 저장합니다. PNG/JPEG 같은 이미지를 브라우저에서 직접 연 경우에는 Chrome image viewer를 캡처하지 않고 이미지의 natural pixel을 직접 추출하므로 fit-to-height로 생기는 좌우 여백이 포함되지 않습니다. 필요할 때만 `:b full-tiles [label]`로 기존 tile 방식을 사용할 수 있습니다. 저장본은 `:b clear-saved` 또는 daemon 재시작 시 정리됩니다. live **Browser Screenshot**은 좌표 정확성을 위해 기존처럼 viewport 한 장만 유지합니다.
 
 Browser 명령의 전체 문법, 좌표 규칙, focus/keyboard 동작, hover 흐름, 실패 복구, 현재 제한사항은 **[CONTROL_COMMANDS.ko.md](./CONTROL_COMMANDS.ko.md)**에 정리했습니다.
 

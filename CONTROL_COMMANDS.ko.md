@@ -500,7 +500,7 @@ URL 인자는 하나만 받을 수 있습니다.
 :b full 긴 리포트
 ```
 
-일반 웹페이지는 현재 Playwright viewport 폭 그대로 full-page screenshot을 만듭니다. PNG/JPEG 파일을 브라우저에서 직접 연 경우 Chrome 기본 image viewer의 fit-to-height를 일시적으로 해제하고 **fit-to-width**로 바꾼 뒤 캡처하므로, 세로로 긴 이미지도 좌우에 큰 공백 없이 폭을 채웁니다.
+일반 웹페이지는 현재 Playwright viewport 폭 그대로 full-page screenshot을 만듭니다. PNG/JPEG 같은 이미지 파일을 브라우저에서 직접 연 경우 Chrome image viewer 화면을 캡처하지 않습니다. 대신 `<img>`의 **natural pixel을 직접 추출**하고 viewport보다 넓을 때만 비율을 유지해 downscale하므로, Chrome fit-to-height가 만드는 좌우 공백이 저장 이미지에 들어가지 않습니다.
 
 - 긴 화면을 여러 조각으로 나누지 않습니다.
 - full capture 뒤 현재 viewport를 다시 observation으로 게시하므로 새로운 observation_id를 사용해야 합니다.

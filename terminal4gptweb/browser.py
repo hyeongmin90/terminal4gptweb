@@ -255,11 +255,11 @@ class BrowserController:
         return observation
 
     def capture_full_page(self) -> bytes:
-        """Capture one full-height PNG at viewport width.
+        """Capture one full-height PNG.
 
-        Browser-native image documents are temporarily switched from Chrome's
-        fit-to-height viewer to fit-to-width so tall images do not contain
-        large side margins.
+        Browser-native image documents bypass Chrome's image viewer entirely:
+        the image's natural pixels are extracted and returned directly, with
+        optional downscaling to the configured viewport width.
         """
         return self._capture_full_page_png()
 
@@ -308,10 +308,12 @@ class BrowserController:
         self.start()
         assert self._page is not None
 
+        direct_image = self._capture_direct_image_png()
+        if direct_image is not None:
+            return direct_image
+
         marker_visible = False
-        direct_image_state: dict | None = None
         try:
-            direct_image_state = self._prepare_direct_image_for_full_capture()
             marker_visible = bool(
                 self._page.evaluate(
                     """() => {
@@ -337,83 +339,73 @@ class BrowserController:
                     )
                 except Exception:
                     pass
-            if direct_image_state is not None:
-                self._restore_direct_image_after_full_capture(direct_image_state)
 
-    def _prepare_direct_image_for_full_capture(self) -> dict | None:
-        """Expand a browser-native image document to a readable natural ratio."""
-        assert self._page is not None
-        state = self._page.evaluate(
-            """() => {
-                if (!String(document.contentType || '').startsWith('image/')) return null;
-                const img = document.querySelector('img');
-                if (!img || !img.naturalWidth || !img.naturalHeight) return null;
+    def _capture_direct_image_png(self) -> bytes | None:
+        """Return natural pixels for a browser-native image document.
 
-                const renderWidth = window.innerWidth;
-                const renderHeight = Math.max(
-                    1,
-                    Math.round(img.naturalHeight * (renderWidth / img.naturalWidth))
-                );
-                const state = {
-                    imgStyle: img.getAttribute('style'),
-                    bodyStyle: document.body ? document.body.getAttribute('style') : null,
-                    htmlStyle: document.documentElement.getAttribute('style'),
-                };
-
-                Object.assign(document.documentElement.style, {
-                    height: 'auto',
-                    minHeight: '0',
-                    overflow: 'visible',
-                });
-                if (document.body) {
-                    Object.assign(document.body.style, {
-                        margin: '0',
-                        padding: '0',
-                        display: 'block',
-                        width: renderWidth + 'px',
-                        height: renderHeight + 'px',
-                        minHeight: '0',
-                        overflow: 'visible',
-                    });
-                }
-                Object.assign(img.style, {
-                    display: 'block',
-                    position: 'static',
-                    margin: '0',
-                    padding: '0',
-                    width: renderWidth + 'px',
-                    height: renderHeight + 'px',
-                    maxWidth: 'none',
-                    maxHeight: 'none',
-                    objectFit: 'fill',
-                    cursor: 'default',
-                });
-                return state;
-            }"""
-        )
-        return state if isinstance(state, dict) else None
-
-    def _restore_direct_image_after_full_capture(self, state: dict) -> None:
+        Chrome displays tall direct images with fit-to-height styling. Reading
+        the rendered viewport would therefore preserve large side margins.
+        Instead, draw the image at natural size on an offscreen canvas and
+        serialize those pixels directly.
+        """
         assert self._page is not None
         try:
-            self._page.evaluate(
-                """(state) => {
-                    const restore = (el, value) => {
-                        if (!el) return;
-                        if (value === null || value === undefined) {
-                            el.removeAttribute('style');
-                        } else {
-                            el.setAttribute('style', value);
-                        }
+            result = self._page.evaluate(
+                """() => {
+                    if (!String(document.contentType || '').startsWith('image/')) {
+                        return null;
+                    }
+                    const img = document.querySelector('img');
+                    if (!img || !img.naturalWidth || !img.naturalHeight) {
+                        return null;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) throw new Error('2D canvas context unavailable');
+                    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
+                    return {
+                        width: img.naturalWidth,
+                        height: img.naturalHeight,
+                        dataUrl: canvas.toDataURL('image/png'),
                     };
-                    restore(document.querySelector('img'), state.imgStyle);
-                    restore(document.body, state.bodyStyle);
-                    restore(document.documentElement, state.htmlStyle);
-                }""",
-                state,
+                }"""
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            raise BrowserError(f"Could not extract direct image pixels: {exc}") from exc
+
+        if not isinstance(result, dict):
+            return None
+
+        data_url = str(result.get("dataUrl", ""))
+        prefix = "data:image/png;base64,"
+        if not data_url.startswith(prefix):
+            raise BrowserError("Direct image extraction returned an invalid PNG data URL.")
+
+        try:
+            png = base64.b64decode(data_url[len(prefix):], validate=True)
+        except Exception as exc:
+            raise BrowserError(f"Could not decode direct image pixels: {exc}") from exc
+
+        try:
+            with Image.open(BytesIO(png)) as image:
+                image.load()
+                if image.width <= self.settings.width:
+                    return png
+                target_height = max(
+                    1,
+                    round(image.height * (self.settings.width / image.width)),
+                )
+                resized = image.resize(
+                    (self.settings.width, target_height),
+                    Image.Resampling.LANCZOS,
+                )
+                buffer = BytesIO()
+                resized.save(buffer, format="PNG")
+                return buffer.getvalue()
+        except Exception as exc:
+            raise BrowserError(f"Could not normalize direct image pixels: {exc}") from exc
 
     def _capture_vision_base64(self) -> tuple[str, int]:
         if not self.settings.vision_enabled:
