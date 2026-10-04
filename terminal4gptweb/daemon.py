@@ -192,6 +192,9 @@ class TerminalDaemon:
             if name == "full":
                 self._save_browser_full_page(args)
                 return
+            if name == "full-tiles":
+                self._save_browser_full_page_tiles(args)
+                return
             if name == "clear-saved":
                 if args:
                     raise BrowserError("Usage: :b clear-saved")
@@ -253,6 +256,22 @@ class TerminalDaemon:
         if previous is None:
             raise BrowserError("No browser observation exists yet. Run :b shot first.")
         label = self._browser_capture_label(args, previous)
+        screenshot = self.browser.capture_full_page()
+        self.notion.append_browser_saved_images(
+            page_id=self.config.notion.page_id,
+            images=[(screenshot, f"{label} · full-width")],
+        )
+        observation = self.browser.observe()
+        self._publish_browser_observation(
+            observation,
+            extra_lines=[f"saved_full: {label}", "saved_full_mode: single"],
+        )
+
+    def _save_browser_full_page_tiles(self, args: list[str]) -> None:
+        previous = self.browser.last_observation
+        if previous is None:
+            raise BrowserError("No browser observation exists yet. Run :b shot first.")
+        label = self._browser_capture_label(args, previous)
         tiles = self.browser.capture_full_page_tiles()
         images = [
             (
@@ -269,7 +288,7 @@ class TerminalDaemon:
         self._publish_browser_observation(
             observation,
             extra_lines=[
-                f"saved_full: {label}",
+                f"saved_full_tiles: {label}",
                 f"saved_tiles: {len(tiles)}",
             ],
         )

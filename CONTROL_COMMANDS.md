@@ -343,6 +343,7 @@ open
 shot
 save
 full
+full-tiles
 clear-saved
 click
 move
@@ -416,21 +417,30 @@ Copy the latest viewport screenshot into **Browser Saved Snapshots** so it remai
 
 ---
 
-## 10B. `:b full [label]` — save a long page as tiles
+## 10B. `:b full [label]` — save one full-width long screenshot
 
-Capture the whole document, then split the full-page screenshot into **viewport-height PNG tiles** under Browser Saved Snapshots.
+Capture the entire document as **one full-height PNG fitted to the browser viewport width** and store it under Browser Saved Snapshots.
 
 ```text
 :b full
 :b full long report
 ```
 
-Very tall single images become tiny when Notion scales them to page width. Tiling preserves readable detail while keeping the existing live viewport screenshot unchanged for coordinate work.
+Normal web pages use the Playwright viewport width for the full-page screenshot. When an image is opened directly in Chrome, Terminal4GPTWeb bypasses the browser's fit-to-height viewer and extracts the `<img>` element's **natural pixels** directly. Images wider than the configured viewport are downscaled proportionally; viewer side margins are never part of the saved image.
 
-- Up to 20 tiles are allowed.
-- Larger pages are rejected by the safety limit; scroll to selected sections and use `:b save` instead.
+- The long page is not split into multiple images.
 - A fresh live observation is published after the full capture, so use the new observation_id for subsequent coordinate actions.
-- Full-page tiles are for inspection/comparison, not click coordinates.
+- The saved full image is for inspection/comparison; coordinate actions still use the live Browser Screenshot.
+
+### Optional: `:b full-tiles [label]`
+
+Use the previous viewport-height tile view only when it is explicitly useful.
+
+```text
+:b full-tiles long report
+```
+
+Up to 20 tiles are saved.
 
 ---
 
@@ -1008,7 +1018,8 @@ Default:
 | navigate | `:b goto <url>` / `:b open <url>` |
 | observe | `:b shot` |
 | save current viewport | `:b save [label]` |
-| save long page as tiles | `:b full [label]` |
+| save long page as one full-width image | `:b full [label]` |
+| save long page as tiles (optional) | `:b full-tiles [label]` |
 | clear saved captures | `:b clear-saved` |
 | move/hover | `:b move <obs> <x> <y>` |
 | click | `:b click <obs> <x> <y>` |

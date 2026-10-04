@@ -94,6 +94,16 @@ class _FakeFullPage:
         return buffer.getvalue()
 
 
+def test_full_page_capture_returns_one_full_height_image():
+    controller = BrowserController(BrowserSettings(width=1280, height=720))
+    controller._page = _FakeFullPage(width=1280, height=1805)
+
+    screenshot = controller.capture_full_page()
+
+    with Image.open(BytesIO(screenshot)) as image:
+        assert image.size == (1280, 1805)
+
+
 def test_full_page_capture_is_split_into_viewport_height_tiles():
     controller = BrowserController(BrowserSettings(width=1280, height=720))
     controller._page = _FakeFullPage(width=1280, height=1500)
@@ -113,3 +123,50 @@ def test_full_page_capture_rejects_too_many_tiles():
 
     with pytest.raises(BrowserError, match="safety limit"):
         controller.capture_full_page_tiles(max_tiles=20)
+
+
+class _FakeDirectImagePage:
+    def __init__(self, data_url: str):
+        self.data_url = data_url
+
+    def evaluate(self, script):
+        return {
+            "width": 1280,
+            "height": 1805,
+            "dataUrl": self.data_url,
+        }
+
+
+def test_direct_image_capture_uses_natural_pixels_without_viewer_margins():
+    source = Image.new("RGB", (1280, 1805), (24, 24, 25))
+    for y in range(1805):
+        source.putpixel((0, y), (255, 0, 0))
+        source.putpixel((1279, y), (0, 255, 0))
+    buffer = BytesIO()
+    source.save(buffer, format="PNG")
+    data_url = "data:image/png;base64," + __import__("base64").b64encode(buffer.getvalue()).decode("ascii")
+
+    controller = BrowserController(BrowserSettings(width=1280, height=720))
+    controller._page = _FakeDirectImagePage(data_url)
+
+    png = controller.capture_full_page()
+
+    with Image.open(BytesIO(png)) as image:
+        assert image.size == (1280, 1805)
+        assert image.getpixel((0, 900)) == (255, 0, 0)
+        assert image.getpixel((1279, 900)) == (0, 255, 0)
+
+
+def test_direct_image_capture_downscales_only_when_wider_than_viewport():
+    source = Image.new("RGB", (2560, 1000), (1, 2, 3))
+    buffer = BytesIO()
+    source.save(buffer, format="PNG")
+    data_url = "data:image/png;base64," + __import__("base64").b64encode(buffer.getvalue()).decode("ascii")
+
+    controller = BrowserController(BrowserSettings(width=1280, height=720))
+    controller._page = _FakeDirectImagePage(data_url)
+
+    png = controller.capture_full_page()
+
+    with Image.open(BytesIO(png)) as image:
+        assert image.size == (1280, 500)

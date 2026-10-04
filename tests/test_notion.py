@@ -229,7 +229,7 @@ def test_terminal_page_children_are_compact():
     assert "Quick Commands" in text
     assert "Browser open" in text
     assert "Save current browser view" in text
-    assert "Save long page as readable tiles" in text
+    assert "Save long page as one full-width image" in text
     assert "Common TUI recipes" not in text
     assert "Key names and aliases" not in text
 
@@ -249,6 +249,7 @@ def test_help_page_contains_agent_commands_and_recovery():
     assert "Browser Control Loop" in text
     assert ":b save [label]" in text
     assert ":b full [label]" in text
+    assert ":b full-tiles [label]" in text
     assert ":b clear-saved" in text
     assert "STALE_OBSERVATION" in text
     assert "click field → wait for ready → type" in text
