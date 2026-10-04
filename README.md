@@ -2,26 +2,29 @@
 
 [English](./README.en.md) · [GPT 시작 프롬프트](./GPT_PROMPT.ko.md) · [제어 명령 전체 레퍼런스](./CONTROL_COMMANDS.ko.md) · [상세 설치 가이드](./INSTALL.ko.md)
 
-**GPT 웹에 로컬 WSL/Linux 셸 서버를 직접 노출하지 않고도 실제 터미널 도구를 연결합니다.**
+**웹 기반 AI 에이전트에 실제 개발 환경의 터미널과 브라우저를 연결합니다. 셸 서버를 인터넷에 직접 노출할 필요는 없습니다.**
 
-`Terminal4GPTWeb`은 Notion을 **GPT 웹 세션, 로컬 Linux PTY, Playwright 브라우저 사이의 브리지**로 사용합니다.
+`Terminal4GPTWeb`은 Notion을 **웹 AI 클라이언트와 로컬 Linux PTY / Playwright 실행 환경 사이의 제어 브리지**로 사용합니다.
 
-GPT가 Notion 커넥터를 통해 생성된 페이지를 읽고 수정할 수 있다면 다음과 같은 작업이 가능합니다.
+GitHub·Notion 같은 SaaS 커넥터가 코드와 문서의 **컨텍스트**를 제공한다면, Terminal4GPTWeb은 그 컨텍스트를 바탕으로 실제 머신에서 **실행하고 검증하는 계층**을 제공합니다.
 
-- 현재 터미널 화면 읽기
-- 셸 명령 실행
-- Enter, 방향키, Backspace, Esc, Function key 입력
-- Ctrl-C, Ctrl-O, Ctrl-X 같은 Ctrl 조합 입력
-- `nano`, `vim`, `less`, `top`, Codex 같은 TUI 프로그램 조작
-- `cd`, 환경변수, REPL, foreground process 등 셸 상태 유지
-- Playwright로 웹 페이지를 열고 GPT Vision으로 화면을 확인한 뒤 viewport 좌표로 마우스 조작
+웹 AI가 생성된 Notion 페이지를 읽고 수정할 수 있다면 다음과 같은 작업이 가능합니다.
+
+- `git`, build, unit/integration test 같은 실제 셸 명령 실행
+- Docker, Kubernetes, SSH, cloud CLI 등 로컬에 설치된 도구 사용
+- 현재 터미널 화면 읽기와 persistent PTY 상태 유지
+- Enter, 방향키, Ctrl-C 등 실제 키 입력과 TUI 프로그램 조작
+- `nano`, `vim`, `less`, `top`, Codex 같은 터미널 애플리케이션 사용
+- Playwright로 웹 페이지를 열고 화면을 확인한 뒤 브라우저 E2E 검증
 - 선택적으로 [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime) 안에서 셸 실행 — 파일시스템·네트워크 제한과 credential masking
 
 한 줄로 표현하면:
 
-> **GPT Web ↔ Notion ↔ PTY / Playwright ↔ WSL / Linux / Web**
+> **Web AI ↔ Notion ↔ Terminal4GPTWeb ↔ PTY / Playwright ↔ WSL / Linux / Web**
 
-Notion은 GPT와 로컬 daemon이 공유하는 입출력 화면이고, 실제 터미널 세션은 로컬 daemon이 관리합니다.
+Notion은 제품의 목적지가 아니라, 여러 웹 AI가 접근할 수 있는 **transport / control surface**입니다. 실제 터미널과 브라우저 세션은 로컬 daemon이 관리합니다.
+
+Terminal4GPTWeb은 특정 모델 제공자에 종속되지 않습니다. 생성된 Notion 페이지를 안정적으로 읽고 수정할 수 있는 웹 AI 클라이언트라면 같은 구조를 사용할 수 있으며, 현재 문서는 ChatGPT Web 흐름을 기준으로 가장 자세히 설명합니다.
 
 > [!CAUTION]
 > PTY sandbox는 **선택 기능**입니다. `sandbox.enabled = false`(기본값)이면 Input에 입력된 명령은 daemon을 실행한 Linux 사용자의 권한으로 그대로 실행됩니다. `sandbox.enabled = true`이면 셸이 [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime) 안에서 실행되어 파일시스템·네트워크·credential masking 규칙이 적용되지만, 일반적인 secret 관리까지 대체하지는 않습니다.
@@ -30,15 +33,18 @@ Notion은 GPT와 로컬 daemon이 공유하는 입출력 화면이고, 실제 �
 
 ## 왜 만들었나요?
 
-GPT 웹은 코드 분석, 문제 해결, 원격 작업 지시에 편리하지만 일반적으로 사용자의 로컬 WSL 터미널에 직접 접근할 수는 없습니다.
+웹 AI의 GitHub·Notion 커넥터는 repository, issue, PR, 문서 같은 원격 컨텍스트를 읽고 쓰는 데 유용합니다. 하지만 그것만으로는 사용자의 실제 개발 환경에서 `npm test`, `pytest`, `kubectl`, `docker`, SSH, 로컬 서버, 브라우저 E2E 같은 작업을 직접 실행할 수 없습니다.
 
-이 프로젝트는 Notion을 중간 브리지로 사용합니다.
+Terminal4GPTWeb은 이 **connector와 runtime 사이의 빈 공간**을 채웁니다.
 
-1. GPT가 **Terminal** 블록을 읽습니다.
-2. GPT가 **Input** 블록에 명령 또는 키 입력을 작성합니다.
+1. 웹 AI가 **Terminal** 블록을 읽습니다.
+2. 웹 AI가 **Input** 블록에 명령 또는 키 입력을 작성합니다.
 3. `t4g` daemon이 이를 읽어 실제 PTY로 전달합니다.
 4. PTY 화면을 다시 **Terminal** 블록에 렌더링합니다.
-5. GPT가 갱신된 화면을 읽고 다음 작업을 이어갑니다.
+5. 웹 AI가 갱신된 화면을 읽고 다음 작업을 이어갑니다.
+6. 필요하면 같은 흐름으로 Playwright 브라우저를 조작하고 결과 화면까지 검증합니다.
+
+즉, SaaS 커넥터를 대체하려는 도구가 아니라 **커넥터가 확보한 컨텍스트를 실제 환경에서 실행·검증으로 이어 주는 도구**입니다.
 
 별도의 공개 SSH endpoint, 자체 웹 서버, DB, MQ가 필요하지 않습니다.
 
@@ -48,7 +54,7 @@ GPT 웹은 코드 분석, 문제 해결, 원격 작업 지시에 편리하지만
 
 ```text
 ┌──────────────────────┐
-│  GPT / ChatGPT Web   │
+│    Web AI client     │
 │   Notion connector   │
 └──────────┬───────────┘
            │ read / edit
@@ -126,8 +132,9 @@ ANSI cursor 이동, 화면 지우기, scrolling, redraw sequence를 로컬에서
 - Bash
 - Notion API token: Personal Access Token 또는 Internal Connection token
 - 생성 페이지의 부모로 사용할 Notion page
-- GPT 웹에서 원격 제어하려면 **ChatGPT의 Notion 연결이 필수**
-- 개발 워크플로에는 **GitHub 연결 권장**
+- 웹 AI에서 원격 제어하려면 생성된 페이지를 읽고 수정할 수 있는 **Notion 연결이 필수**
+- ChatGPT Web은 현재 문서에서 가장 자세히 설명하는 기준 클라이언트
+- 개발 워크플로에는 해당 AI 클라이언트의 **GitHub 연결 권장**
 - 반복 운영 점검에는 지원되는 경우 ChatGPT 일정/자동화 기능 사용 가능
 - sandbox 사용 시에만: Node.js 22.12+, [`@anthropic-ai/sandbox-runtime`](https://github.com/anthropic-experimental/sandbox-runtime) **0.0.78** (`srt`, 현재 검증 버전), `bubblewrap`, `socat`, `ripgrep`, `script`(util-linux)
 
@@ -296,9 +303,9 @@ t4g daemon restart
 
 ---
 
-## GPT 웹 연결 구성
+## 웹 AI 연결 구성 (ChatGPT 기준)
 
-Terminal4GPTWeb은 ChatGPT 웹에서 다음 연결을 함께 사용할 때 활용 범위가 가장 넓습니다.
+Terminal4GPTWeb은 특정 웹 AI에 고정되지 않지만, 아래는 현재 가장 자세히 검증·문서화한 **ChatGPT Web 기준 구성**입니다. 다른 웹 AI도 생성된 Notion 페이지를 읽고 수정할 수 있다면 같은 제어 흐름을 사용할 수 있습니다.
 
 ### 1. Notion — 필수
 
@@ -374,7 +381,7 @@ Playwright로 메인 화면 smoke test까지 실행해.
 
 ---
 
-## GPT / 에이전트 동작 규칙
+## 웹 AI / 에이전트 동작 규칙
 
 안정적으로 사용하려면 에이전트가 다음 `observe → act → observe` 규칙을 따르는 것이 좋습니다.
 
@@ -482,9 +489,9 @@ t4g run
 
 ---
 
-## GPT 웹에서 사용하기
+## 웹 AI에서 사용하기
 
-생성된 Notion 페이지를 GPT가 Notion 커넥터를 통해 읽고 수정할 수 있다면, 이 페이지가 사실상 **GPT용 터미널 도구 인터페이스**가 됩니다.
+생성된 Notion 페이지를 웹 AI가 Notion 커넥터를 통해 읽고 수정할 수 있다면, 이 페이지가 사실상 **웹 AI용 터미널·브라우저 실행 인터페이스**가 됩니다.
 
 예를 들면:
 
