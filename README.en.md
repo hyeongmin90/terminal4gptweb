@@ -554,11 +554,18 @@ Browser Status
 Browser Screenshot
   latest viewport PNG
 
+Browser Saved Snapshots
+  temporary viewport / full-page tiles kept for comparison
+
 Browser Vision Payload
   compressed JPEG + matching observation_id
 ```
 
-Coordinate actions are guarded by the current `observation_id`, preventing old screenshot coordinates from being applied after the page changes. The full browser command syntax, coordinate rules, focus/keyboard behavior, hover workflow, failure recovery and current limitations are all in **[CONTROL_COMMANDS.md](./CONTROL_COMMANDS.md)**.
+Coordinate actions are guarded by the current `observation_id`, preventing old screenshot coordinates from being applied after the page changes.
+
+Before navigating away from a result you want to compare, use `:b save [label]` to keep the current viewport under **Browser Saved Snapshots**. For a vertically long page, `:b full [label]` captures the whole document and splits it into viewport-height PNG tiles so Notion does not shrink one very tall image into an unreadable thumbnail. Use `:b clear-saved` to remove the temporary captures; they are also cleared on daemon restart. The live **Browser Screenshot** remains a single viewport image so coordinate reasoning stays exact.
+
+The full browser command syntax, coordinate rules, focus/keyboard behavior, hover workflow, failure recovery and current limitations are all in **[CONTROL_COMMANDS.md](./CONTROL_COMMANDS.md)**.
 
 ---
 
