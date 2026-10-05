@@ -106,6 +106,7 @@ class TerminalSettings:
     host: str = "ubuntu"
     count: int = 1
     names: list[str] = field(default_factory=lambda: ["Terminal4GPTWeb"])
+    names_explicit: bool = False
     input_prompt: str = ""
     columns: int = 120
     rows: int = 60
@@ -220,6 +221,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         host=terminal_raw.get("host", "ubuntu"),
         count=count,
         names=names,
+        names_explicit="names" in terminal_raw,
         input_prompt=input_prompt,
         columns=int(terminal_raw.get("columns", 120)),
         rows=rows,
