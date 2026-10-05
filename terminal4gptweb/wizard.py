@@ -11,6 +11,7 @@ from .config import (
     DEFAULT_CONFIG_PATH,
     NotionSettings,
     SandboxSettings,
+    TerminalPageSettings,
     TerminalSettings,
     load_config,
     write_config,
@@ -41,13 +42,20 @@ def run_init(config_path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     rows = int(_prompt("Terminal rows", "60"))
     poll_interval = float(_prompt("Input poll interval (seconds)", "1.2"))
     refresh_interval = float(_prompt("Screen refresh interval (seconds)", "1.5"))
-    title = _prompt("Notion page title", "Terminal4GPTWeb")
+    count = int(_prompt("Terminal count", "1"))
+    if count < 1 or count > 16:
+        raise ValueError("Terminal count must be between 1 and 16.")
+    base_title = _prompt("Base Notion page title", "Terminal4GPTWeb")
+    names = _prompt_terminal_names(count, base_title)
 
     terminal = TerminalSettings(
         shell=shell,
         cwd=cwd,
         user=user,
         host=host,
+        count=count,
+        names=names,
+        names_explicit=True,
         input_prompt="",
         columns=columns,
         rows=rows,
@@ -63,7 +71,6 @@ def run_init(config_path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     config = _create_notion_surfaces(
         token=token,
         parent_page_id=parent_page_id,
-        title=title,
         terminal=terminal,
         browser=browser,
     )
@@ -84,7 +91,6 @@ def run_reinit(config_path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     config = _create_notion_surfaces(
         token=current.notion.token,
         parent_page_id=parent_page_id,
-        title="Terminal4GPTWeb",
         terminal=current.terminal,
         browser=current.browser,
     )
@@ -217,19 +223,25 @@ def _create_notion_surfaces(
     *,
     token: str,
     parent_page_id: str,
-    title: str,
     terminal: TerminalSettings,
     browser: BrowserSettings,
 ) -> AppConfig:
     print("\nChecking Notion access and creating pages...")
     with NotionClient(token) as notion:
         notion.get_page(parent_page_id)
-        created = notion.create_terminal_page(
-            parent_page_id=parent_page_id,
-            title=title,
-            terminal_text="Terminal4GPTWeb\n\nLocal PTY is not connected yet. Run: t4g daemon start",
-            input_text=terminal.input_prompt,
-        )
+        created_pages = [
+            notion.create_terminal_page(
+                parent_page_id=parent_page_id,
+                title=name,
+                terminal_text=(
+                    f"Terminal4GPTWeb · {name}\n\n"
+                    "Local PTY is not connected yet. Run: t4g daemon start"
+                ),
+                input_text=terminal.input_prompt,
+            )
+            for name in terminal.names
+        ]
+        created = created_pages[0]
         help_page = notion.create_help_page(parent_page_id=created.page_id)
         vision_page = notion.ensure_browser_vision_page(
             parent_page_id=created.page_id,
@@ -255,6 +267,16 @@ def _create_notion_surfaces(
             ),
         )
 
+    terminal_pages = [
+        TerminalPageSettings(
+            page_id=page.page_id,
+            terminal_block_id=page.terminal_block_id,
+            input_block_id=page.input_block_id,
+            page_url=page.page_url,
+        )
+        for page in created_pages
+    ]
+
     return AppConfig(
         notion=NotionSettings(
             token=token,
@@ -270,10 +292,25 @@ def _create_notion_surfaces(
             browser_vision_page_id=vision_page.page_id,
             browser_vision_block_id=vision_page.block_id,
             browser_vision_page_url=vision_page.page_url,
+            terminal_pages=terminal_pages,
         ),
         terminal=terminal,
         browser=browser,
     )
+
+
+def _prompt_terminal_names(count: int, base_title: str) -> list[str]:
+    defaults = (
+        [base_title]
+        if count == 1
+        else [f"{base_title} {index}" for index in range(1, count + 1)]
+    )
+    names: list[str] = []
+    for index, default in enumerate(defaults, start=1):
+        names.append(_prompt(f"Terminal {index} page name", default))
+    if len({name.casefold() for name in names}) != len(names):
+        raise ValueError("Terminal page names must be unique.")
+    return names
 
 
 def _print_init_result(
@@ -285,14 +322,17 @@ def _print_init_result(
     written = write_config(config, config_path)
 
     print("\n✓ Notion connection verified")
-    print("✓ Compact Terminal / Input control page created")
+    print(f"✓ {config.terminal.count} Terminal / Input control page(s) created")
     print("✓ Terminal4GPTWeb Help child page created")
     print("✓ Browser Status / Browser Screenshot surface created")
     print("✓ Browser Vision Payload child page created")
     print("✓ Runtime block self-healing enabled")
     print(f"✓ Config written: {written}")
-    if config.notion.page_url:
-        print(f"\nPage: {config.notion.page_url}")
+    if config.notion.terminal_pages:
+        print("\nTerminal pages:")
+        for index, page in enumerate(config.notion.terminal_pages[: config.terminal.count]):
+            name = config.terminal.names[index]
+            print(f"  {index + 1}. {name}: {page.page_url or page.page_id}")
     if config.notion.help_page_url:
         print(f"Help: {config.notion.help_page_url}")
 

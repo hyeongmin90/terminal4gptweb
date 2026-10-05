@@ -2,16 +2,38 @@ from __future__ import annotations
 
 import re
 import selectors
+from dataclasses import dataclass, replace
 import signal
 import time
 from pathlib import Path
 
 from .browser import BrowserController, BrowserError, BrowserObservation, parse_browser_command
-from .config import AppConfig, DEFAULT_CONFIG_PATH, write_config
-from .notion import NotionClient, NotionError
+from .config import AppConfig, DEFAULT_CONFIG_PATH, TerminalPageSettings, write_config
+from .notion import NotionClient, NotionError, page_title
 from .protocol import InputAction, InputKind, extract_submission
 from .sandbox import SandboxUnavailableError
 from .terminal import PTYSession
+
+
+@dataclass(slots=True)
+class TerminalRuntime:
+    index: int
+    name: str
+    page: TerminalPageSettings
+    session: PTYSession
+    last_input_written: str = ""
+    last_terminal_written: str = ""
+    dirty: bool = True
+    ended_reported: bool = False
+
+
+# Keep routine Input polling below the standard Notion connection budget and
+# leave headroom for terminal renders, health checks, and browser updates.
+MIN_INPUT_POLL_SLOT = 0.6
+
+
+def input_poll_slot(count: int, poll_interval: float) -> float:
+    return max(poll_interval / count, MIN_INPUT_POLL_SLOT)
 
 
 class TerminalDaemon:
@@ -24,12 +46,9 @@ class TerminalDaemon:
         self.config = config
         self.config_path = Path(config_path).expanduser()
         self.notion = NotionClient(config.notion.token, api_version=config.notion.api_version)
-        self.session = PTYSession(config.terminal)
         self.browser = BrowserController(config.browser)
         self.selector = selectors.DefaultSelector()
-        self._last_input_written = ""
-        self._last_terminal_written = ""
-        self._dirty = True
+        self.runtimes: list[TerminalRuntime] = []
         self._stop_requested = False
 
     @property
@@ -39,140 +58,252 @@ class TerminalDaemon:
     def request_stop(self) -> None:
         self._stop_requested = True
 
+    def _ensure_terminal_pages(self) -> None:
+        pages = self.config.notion.terminal_pages
+        config_changed = False
+        if not pages:
+            pages.append(
+                TerminalPageSettings(
+                    page_id=self.config.notion.page_id,
+                    terminal_block_id=self.config.notion.terminal_block_id,
+                    input_block_id=self.config.notion.input_block_id,
+                    page_url=self.config.notion.page_url,
+                )
+            )
+
+        if self.config.terminal.count > len(pages):
+            parent_page_id = self.config.notion.parent_page_id.strip()
+            if not parent_page_id:
+                raise RuntimeError(
+                    "terminal.count exceeds the configured Notion terminal pages, but "
+                    "notion.parent_page_id is missing. Run `t4g reinit` once to rebuild "
+                    "the multi-terminal page set."
+                )
+            for index in range(len(pages), self.config.terminal.count):
+                name = self.config.terminal.names[index]
+                created = self.notion.create_terminal_page(
+                    parent_page_id=parent_page_id,
+                    title=name,
+                    terminal_text=(
+                        f"Terminal4GPTWeb · {name}\n\n"
+                        "Local PTY is not connected yet. Run: t4g daemon start"
+                    ),
+                    input_text=self.input_prompt,
+                )
+                pages.append(
+                    TerminalPageSettings(
+                        page_id=created.page_id,
+                        terminal_block_id=created.terminal_block_id,
+                        input_block_id=created.input_block_id,
+                        page_url=created.page_url,
+                    )
+                )
+                config_changed = True
+
+        active_pages = pages[: self.config.terminal.count]
+        for index, page in enumerate(active_pages):
+            notion_page = self.notion.get_page(page.page_id)
+            if index == 0 and not self.config.terminal.names_explicit:
+                # Legacy configs did not persist the user-selected page title.
+                # Adopt the current Notion title instead of silently renaming it
+                # to the new default on the first multi-terminal-aware start.
+                existing_title = page_title(notion_page)
+                if existing_title and existing_title != self.config.terminal.names[0]:
+                    self.config.terminal.names[0] = existing_title
+                    config_changed = True
+            self.notion.update_page_title(page.page_id, self.config.terminal.names[index])
+
+        if config_changed:
+            write_config(self.config, self.config_path)
+
+        primary = active_pages[0]
+        self.config.notion.page_id = primary.page_id
+        self.config.notion.terminal_block_id = primary.terminal_block_id
+        self.config.notion.input_block_id = primary.input_block_id
+        self.config.notion.page_url = primary.page_url
+
+    def _build_runtimes(self) -> None:
+        self.runtimes = [
+            TerminalRuntime(
+                index=index,
+                name=self.config.terminal.names[index],
+                page=page,
+                # PTYSession.resize() mutates TerminalSettings. Give every
+                # terminal its own settings object so resizing one PTY cannot
+                # change another PTY's render dimensions.
+                session=PTYSession(replace(self.config.terminal)),
+            )
+            for index, page in enumerate(
+                self.config.notion.terminal_pages[: self.config.terminal.count]
+            )
+        ]
+
     def run(self) -> None:
         previous_sigterm = signal.getsignal(signal.SIGTERM)
         signal.signal(signal.SIGTERM, lambda _signum, _frame: self.request_stop())
         try:
+            self._ensure_terminal_pages()
+            self._build_runtimes()
+
+            started: list[TerminalRuntime] = []
             try:
-                self.session.start()
+                for runtime in self.runtimes:
+                    runtime.session.start()
+                    started.append(runtime)
+                    self.selector.register(
+                        runtime.session.fileno(),
+                        selectors.EVENT_READ,
+                        data=runtime.index,
+                    )
             except SandboxUnavailableError as exc:
                 self._report_startup_failure(f"[SANDBOX UNAVAILABLE]\n{exc}")
+                for runtime in started:
+                    runtime.session.close()
                 raise
-            self.selector.register(self.session.fileno(), selectors.EVENT_READ)
 
             self._health_check()
-            self._ensure_browser_blocks()
-            self._ensure_browser_vision_page()
             self._reset_browser_surface()
-            self._reset_input()
-            self._write_terminal(force=True)
+            for runtime in self.runtimes:
+                self._reset_input(runtime)
+                self._write_terminal(runtime, force=True)
 
             now = time.monotonic()
+            poll_cursor = 0
+            health_cursor = 0
+            poll_slot = input_poll_slot(
+                len(self.runtimes),
+                self.config.terminal.poll_interval,
+            )
             next_poll = now
             next_render = now
             next_health = now + self.config.terminal.health_check_interval
 
-            while self.session.is_alive() and not self._stop_requested:
+            while not self._stop_requested and any(
+                runtime.session.is_alive() for runtime in self.runtimes
+            ):
                 now = time.monotonic()
                 next_due = min(next_poll, next_render, next_health)
                 timeout = max(0.0, next_due - now)
                 events = self.selector.select(timeout=min(timeout, 0.25))
-                if events and self.session.read_ready():
-                    self._dirty = True
+                for key, _mask in events:
+                    runtime = self.runtimes[key.data]
+                    if runtime.session.read_ready():
+                        runtime.dirty = True
 
                 now = time.monotonic()
                 if now >= next_poll:
-                    self._poll_input()
-                    next_poll = now + self.config.terminal.poll_interval
+                    runtime = self.runtimes[poll_cursor]
+                    if runtime.session.is_alive():
+                        self._poll_input(runtime)
+                    poll_cursor = (poll_cursor + 1) % len(self.runtimes)
+                    next_poll = now + poll_slot
 
                 if now >= next_render:
-                    self._write_terminal()
+                    for runtime in self.runtimes:
+                        self._write_terminal(runtime)
                     next_render = now + self.config.terminal.refresh_interval
 
+                for runtime in self.runtimes:
+                    if not runtime.session.is_alive() and not runtime.ended_reported:
+                        self._mark_session_ended(runtime)
+
                 if now >= next_health:
-                    self._health_check()
+                    runtime = self.runtimes[health_cursor]
+                    self._health_check_runtime(runtime)
+                    if health_cursor == 0:
+                        self._health_check_browser()
+                    health_cursor = (health_cursor + 1) % len(self.runtimes)
                     next_health = now + self.config.terminal.health_check_interval
 
-            if self.session.is_alive():
-                self.session.send_control("C")
-                time.sleep(0.05)
-                self.session.close()
-            else:
-                self.session.read_ready()
-
             if self._stop_requested:
-                try:
-                    self.notion.update_code_block(
-                        self.config.notion.input_block_id,
-                        "[DAEMON STOPPED] Start with: t4g daemon start",
-                        language="plain text",
-                    )
-                except NotionError:
-                    pass
+                for runtime in self.runtimes:
+                    if runtime.session.is_alive():
+                        runtime.session.send_control("C")
+                        time.sleep(0.02)
+                        runtime.session.close()
+                    if not runtime.ended_reported:
+                        try:
+                            self.notion.update_code_block(
+                                runtime.page.input_block_id,
+                                "[DAEMON STOPPED] Start with: t4g daemon start",
+                                language="plain text",
+                            )
+                        except NotionError:
+                            pass
             else:
-                self._dirty = True
-                self._write_terminal(force=True, suffix="\n\n[Terminal4GPTWeb: shell session ended]")
-                try:
-                    self.notion.update_code_block(
-                        self.config.notion.input_block_id,
-                        "[SESSION ENDED] Restart with: t4g run",
-                        language="plain text",
-                    )
-                except NotionError:
-                    pass
+                for runtime in self.runtimes:
+                    if not runtime.ended_reported:
+                        self._mark_session_ended(runtime)
         finally:
             signal.signal(signal.SIGTERM, previous_sigterm)
             try:
                 self.selector.close()
             finally:
                 self.browser.close()
-                self.session.close()
+                for runtime in self.runtimes:
+                    runtime.session.close()
                 self.notion.close()
 
     def _report_startup_failure(self, text: str) -> None:
-        try:
-            self.notion.update_code_block(
-                self.config.notion.input_block_id,
-                text,
-                language="plain text",
-            )
-        except NotionError:
-            pass
+        for page in self.config.notion.terminal_pages[: self.config.terminal.count]:
+            try:
+                self.notion.update_code_block(
+                    page.input_block_id,
+                    text,
+                    language="plain text",
+                )
+            except NotionError:
+                pass
 
-    def _poll_input(self) -> None:
+    def _poll_input(self, runtime: TerminalRuntime) -> None:
         try:
-            text = self.notion.get_code_text(self.config.notion.input_block_id)
+            text = self.notion.get_code_text(runtime.page.input_block_id)
         except NotionError as exc:
             if exc.is_not_found:
-                self._recover_runtime_blocks()
+                self._recover_runtime_blocks(runtime)
                 return
-            print(f"[notion] input poll failed: {exc}")
+            print(f"[notion:{runtime.name}] input poll failed: {exc}")
             return
 
-        action, should_reset = extract_submission(text, self._last_input_written)
+        action, should_reset = extract_submission(text, runtime.last_input_written)
         if action is None:
             return
 
         try:
-            self._dispatch(action)
+            self._dispatch(runtime, action)
         except Exception as exc:
-            print(f"[input] {exc}")
-            self._dirty = True
+            print(f"[input:{runtime.name}] {exc}")
+            runtime.dirty = True
         finally:
             if should_reset:
-                self._reset_input()
+                self._reset_input(runtime)
 
-    def _dispatch(self, action: InputAction) -> None:
+    def _dispatch(self, runtime: TerminalRuntime, action: InputAction) -> None:
         if action.kind is InputKind.NONE:
             return
         if action.kind is InputKind.LINE:
-            self.session.send_line(action.value)
+            runtime.session.send_line(action.value)
             return
         if action.kind is InputKind.RAW:
-            self.session.send_text(action.value)
+            runtime.session.send_text(action.value)
             return
         if action.kind is InputKind.CONTROL:
-            self.session.send_control(action.value)
+            runtime.session.send_control(action.value)
             return
         if action.kind is InputKind.KEY:
-            self.session.send_key(action.value)
+            runtime.session.send_key(action.value)
             return
         if action.kind is InputKind.RESIZE:
             assert action.columns is not None and action.rows is not None
-            self.session.resize(action.columns, action.rows)
-            self._dirty = True
+            runtime.session.resize(action.columns, action.rows)
+            runtime.dirty = True
             return
         if action.kind is InputKind.BROWSER:
+            if runtime.index != 0:
+                raise ValueError(
+                    "Browser commands are available on the first terminal page only. "
+                    f"Use {self.config.terminal.names[0]!r} for :b commands."
+                )
             self._handle_browser(action.value)
             return
         raise ValueError(f"Unhandled input action: {action.kind}")
@@ -499,95 +630,138 @@ class TerminalDaemon:
 
         self.notion.ensure_browser_saved_section(page_id=self.config.notion.page_id)
 
-    def _reset_input(self) -> None:
-        self._set_input(self.input_prompt)
+    def _reset_input(self, runtime: TerminalRuntime) -> None:
+        self._set_input(runtime, self.input_prompt)
 
-    def _set_input(self, text: str) -> None:
+    def _set_input(self, runtime: TerminalRuntime, text: str) -> None:
         try:
             self.notion.update_code_block(
-                self.config.notion.input_block_id,
+                runtime.page.input_block_id,
                 text,
                 language="bash",
             )
-            self._last_input_written = text
+            runtime.last_input_written = text
         except NotionError as exc:
             if exc.is_not_found:
-                self._recover_runtime_blocks()
+                self._recover_runtime_blocks(runtime)
                 return
-            print(f"[notion] input update failed: {exc}")
+            print(f"[notion:{runtime.name}] input update failed: {exc}")
 
-    def _write_terminal(self, *, force: bool = False, suffix: str = "") -> None:
-        if not force and not self._dirty:
+    def _write_terminal(
+        self,
+        runtime: TerminalRuntime,
+        *,
+        force: bool = False,
+        suffix: str = "",
+    ) -> None:
+        if not force and not runtime.dirty:
             return
-        text = sanitize_terminal_for_notion(self.session.render() + suffix)
-        if not force and text == self._last_terminal_written:
-            self._dirty = False
+        text = sanitize_terminal_for_notion(runtime.session.render() + suffix)
+        if not force and text == runtime.last_terminal_written:
+            runtime.dirty = False
             return
         try:
             self.notion.update_code_block(
-                self.config.notion.terminal_block_id,
+                runtime.page.terminal_block_id,
                 text,
                 language="plain text",
             )
-            self._last_terminal_written = text
-            self._dirty = False
+            runtime.last_terminal_written = text
+            runtime.dirty = False
         except NotionError as exc:
             if exc.is_not_found:
-                self._recover_runtime_blocks()
+                self._recover_runtime_blocks(runtime)
                 return
-            print(f"[notion] terminal update failed: {exc}")
+            print(f"[notion:{runtime.name}] terminal update failed: {exc}")
+
+    def _mark_session_ended(self, runtime: TerminalRuntime) -> None:
+        try:
+            self.selector.unregister(runtime.session.fileno())
+        except Exception:
+            pass
+        runtime.session.read_ready()
+        runtime.dirty = True
+        self._write_terminal(
+            runtime,
+            force=True,
+            suffix="\n\n[Terminal4GPTWeb: shell session ended]",
+        )
+        try:
+            self.notion.update_code_block(
+                runtime.page.input_block_id,
+                "[SESSION ENDED] Restart with: t4g daemon restart",
+                language="plain text",
+            )
+        except NotionError:
+            pass
+        runtime.ended_reported = True
 
     def _health_check(self) -> None:
+        for runtime in self.runtimes:
+            self._health_check_runtime(runtime)
+        self._health_check_browser()
+
+    def _health_check_runtime(self, runtime: TerminalRuntime) -> None:
         try:
-            self._ensure_runtime_blocks()
+            self._ensure_runtime_blocks(runtime)
         except NotionError as exc:
             if exc.is_not_found:
                 raise RuntimeError(
-                    "The configured Notion terminal page no longer exists or is not accessible. "
-                    "Run `t4g init` again if the page was deleted."
+                    f"The Notion terminal page {runtime.name!r} no longer exists or "
+                    "is not accessible. Run `t4g reinit` if the page was deleted."
                 ) from exc
-            print(f"[notion] runtime block health check failed: {exc}")
+            print(f"[notion:{runtime.name}] runtime block health check failed: {exc}")
 
+    def _health_check_browser(self) -> None:
         try:
             self._ensure_browser_blocks()
             self._ensure_browser_vision_page()
         except NotionError as exc:
             print(f"[notion] browser surface health check failed: {exc}")
 
-    def _recover_runtime_blocks(self) -> None:
+    def _recover_runtime_blocks(self, runtime: TerminalRuntime) -> None:
         try:
-            self._ensure_runtime_blocks()
+            self._ensure_runtime_blocks(runtime)
         except NotionError as exc:
             if exc.is_not_found:
                 raise RuntimeError(
-                    "The configured Notion terminal page no longer exists or is not accessible. "
-                    "Run `t4g init` again if the page was deleted."
+                    f"The Notion terminal page {runtime.name!r} no longer exists or "
+                    "is not accessible. Run `t4g reinit` if the page was deleted."
                 ) from exc
-            print(f"[notion] runtime block recovery failed: {exc}")
+            print(f"[notion:{runtime.name}] runtime block recovery failed: {exc}")
 
-    def _ensure_runtime_blocks(self) -> None:
-        terminal_text = sanitize_terminal_for_notion(self.session.render())
+    def _ensure_runtime_blocks(self, runtime: TerminalRuntime) -> None:
+        terminal_text = sanitize_terminal_for_notion(runtime.session.render())
         input_text = self.input_prompt
         blocks = self.notion.ensure_runtime_blocks(
-            page_id=self.config.notion.page_id,
-            terminal_block_id=self.config.notion.terminal_block_id,
-            input_block_id=self.config.notion.input_block_id,
+            page_id=runtime.page.page_id,
+            terminal_block_id=runtime.page.terminal_block_id,
+            input_block_id=runtime.page.input_block_id,
             terminal_text=terminal_text,
             input_text=input_text,
         )
         if not blocks.recreated:
             return
 
-        self.config.notion.terminal_block_id = blocks.terminal_block_id
-        self.config.notion.input_block_id = blocks.input_block_id
+        runtime.page.terminal_block_id = blocks.terminal_block_id
+        runtime.page.input_block_id = blocks.input_block_id
+        if runtime.index == 0:
+            self.config.notion.terminal_block_id = blocks.terminal_block_id
+            self.config.notion.input_block_id = blocks.input_block_id
         write_config(self.config, self.config_path)
 
-        self._last_terminal_written = terminal_text
-        self._last_input_written = input_text
-        self._dirty = False
+        runtime.last_terminal_written = terminal_text
+        runtime.last_input_written = input_text
+        runtime.dirty = False
 
-        print("[notion] one or more runtime blocks were missing, invalid, or misplaced.")
-        print("[notion] repaired only the affected runtime block(s) and updated config.toml.")
+        print(
+            f"[notion:{runtime.name}] one or more runtime blocks were missing, "
+            "invalid, or misplaced."
+        )
+        print(
+            f"[notion:{runtime.name}] repaired only the affected runtime block(s) "
+            "and updated config.toml."
+        )
 
 
 

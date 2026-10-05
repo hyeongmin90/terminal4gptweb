@@ -1,5 +1,7 @@
 from terminal4gptweb.notion import NotionPageSearchResult
-from terminal4gptweb.wizard import _choose_parent_page
+import pytest
+
+from terminal4gptweb.wizard import _choose_parent_page, _prompt_terminal_names
 
 
 class FakeNotion:
@@ -49,3 +51,20 @@ def test_choose_parent_page_direct_url(monkeypatch):
     selected = _choose_parent_page(FakeNotion())
 
     assert selected == "12345678-1234-1234-1234-1234567890ab"
+
+
+def test_prompt_terminal_names_uses_numbered_defaults(monkeypatch):
+    answers = iter(["", "", ""])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+    assert _prompt_terminal_names(3, "Terminal4GPTWeb") == [
+        "Terminal4GPTWeb 1",
+        "Terminal4GPTWeb 2",
+        "Terminal4GPTWeb 3",
+    ]
+
+
+def test_prompt_terminal_names_rejects_duplicate_names(monkeypatch):
+    answers = iter(["Work", "work"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+    with pytest.raises(ValueError, match="unique"):
+        _prompt_terminal_names(2, "Terminal4GPTWeb")
