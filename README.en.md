@@ -821,14 +821,18 @@ count = 3
 names = ["Shell", "Server", "Tests"]
 ```
 
-One daemon multiplexes all configured PTYs and creates named sibling control pages directly under the selected Notion parent. Legacy single-terminal configs remain compatible.
+One daemon multiplexes all configured PTYs and creates named sibling control pages directly under the selected Notion parent. `count` accepts 1–16 terminals and defaults to `1`. Active page names must be unique.
 
-- Increasing `count` creates missing terminal pages on the next daemon start.
-- Renaming entries updates the active page titles on restart.
-- Decreasing `count` does not delete old Notion pages; only the first configured count remains active.
-- Playwright Browser / Vision surfaces and `:b` commands remain on the first terminal page.
-- cwd, TUI/REPL state, input, output, and resize state are independent for each PTY.
-- Input polling is round-robin paced to avoid consuming the Notion API request budget too aggressively; with more terminals, each page is polled less frequently.
+- Legacy single-terminal configs continue to work as `count = 1` without a manual migration step. A custom title on the existing Notion terminal page is preserved on the first upgraded start.
+- Increasing `count` creates missing terminal pages under the same parent on the next daemon start and updates the managed `[[notion.terminals]]` entries.
+- Renaming entries updates active page titles on restart.
+- Decreasing `count` does not delete old Notion pages. Only the first configured count remains active, so those pages can be reused if the count is increased later.
+- Each PTY has independent process, cwd, TUI/REPL state, screen buffer, input/output, and resize state. Resizing one terminal does not change another terminal.
+- One PTY ending does not stop the remaining PTYs, and Terminal/Input block recovery is handled independently per page.
+- Playwright Browser / Vision surfaces and `:b` commands remain available on the **first terminal page only**.
+- Input polling is round-robin paced and runtime health checks are staggered so Notion API traffic does not grow linearly with the terminal count. With more terminals, each page is polled less frequently.
+
+The `[[notion.terminals]]` page/block IDs are runtime-managed values created and repaired by the daemon; they normally do not need to be edited manually.
 
 ## Diagnostics
 
