@@ -12,6 +12,14 @@ DEFAULT_CONFIG_PATH = Path.home() / ".config" / "t4g" / "config.toml"
 
 
 @dataclass(slots=True)
+class TerminalPageSettings:
+    page_id: str
+    terminal_block_id: str
+    input_block_id: str
+    page_url: str = ""
+
+
+@dataclass(slots=True)
 class NotionSettings:
     token: str
     page_id: str
@@ -27,6 +35,7 @@ class NotionSettings:
     browser_vision_page_id: str = ""
     browser_vision_block_id: str = ""
     browser_vision_page_url: str = ""
+    terminal_pages: list[TerminalPageSettings] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -95,6 +104,8 @@ class TerminalSettings:
     cwd: str = str(Path.home())
     user: str = os.environ.get("USER", "user")
     host: str = "ubuntu"
+    count: int = 1
+    names: list[str] = field(default_factory=lambda: ["Terminal4GPTWeb"])
     input_prompt: str = ""
     columns: int = 120
     rows: int = 60
@@ -140,12 +151,46 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     if not token:
         raise ValueError("Notion token is missing from config and NOTION_TOKEN is not set.")
 
+    count = int(terminal_raw.get("count", 1))
+    names = _terminal_names(count, terminal_raw.get("names", []))
+
+    terminal_pages_raw = notion_raw.get("terminals", [])
+    terminal_pages: list[TerminalPageSettings] = []
+    if isinstance(terminal_pages_raw, list):
+        for item in terminal_pages_raw:
+            if not isinstance(item, dict):
+                continue
+            page_id = str(item.get("page_id", "")).strip()
+            terminal_block_id = str(item.get("terminal_block_id", "")).strip()
+            input_block_id = str(item.get("input_block_id", "")).strip()
+            if not (page_id and terminal_block_id and input_block_id):
+                continue
+            terminal_pages.append(
+                TerminalPageSettings(
+                    page_id=page_id,
+                    terminal_block_id=terminal_block_id,
+                    input_block_id=input_block_id,
+                    page_url=str(item.get("page_url", "")),
+                )
+            )
+
+    if terminal_pages:
+        primary = terminal_pages[0]
+    else:
+        primary = TerminalPageSettings(
+            page_id=_required(notion_raw, "page_id"),
+            terminal_block_id=_required(notion_raw, "terminal_block_id"),
+            input_block_id=_required(notion_raw, "input_block_id"),
+            page_url=str(notion_raw.get("page_url", "")),
+        )
+        terminal_pages.append(primary)
+
     notion = NotionSettings(
         token=token,
-        page_id=_required(notion_raw, "page_id"),
-        terminal_block_id=_required(notion_raw, "terminal_block_id"),
-        input_block_id=_required(notion_raw, "input_block_id"),
-        page_url=notion_raw.get("page_url", ""),
+        page_id=primary.page_id,
+        terminal_block_id=primary.terminal_block_id,
+        input_block_id=primary.input_block_id,
+        page_url=primary.page_url,
         parent_page_id=str(notion_raw.get("parent_page_id", "")),
         help_page_id=str(notion_raw.get("help_page_id", "")),
         help_page_url=str(notion_raw.get("help_page_url", "")),
@@ -155,6 +200,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         browser_vision_page_id=str(notion_raw.get("browser_vision_page_id", "")),
         browser_vision_block_id=str(notion_raw.get("browser_vision_block_id", "")),
         browser_vision_page_url=str(notion_raw.get("browser_vision_page_url", "")),
+        terminal_pages=terminal_pages,
     )
 
     sandbox = _load_sandbox(sandbox_raw)
@@ -172,6 +218,8 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         cwd=terminal_raw.get("cwd", str(Path.home())),
         user=terminal_raw.get("user", os.environ.get("USER", "user")),
         host=terminal_raw.get("host", "ubuntu"),
+        count=count,
+        names=names,
         input_prompt=input_prompt,
         columns=int(terminal_raw.get("columns", 120)),
         rows=rows,
@@ -249,11 +297,25 @@ def write_config(config: AppConfig, path: Path | str = DEFAULT_CONFIG_PATH) -> P
             f"browser_vision_block_id = {_toml_string(config.notion.browser_vision_block_id)}",
             f"browser_vision_page_url = {_toml_string(config.notion.browser_vision_page_url)}",
             "",
+            *[
+                line
+                for page in config.notion.terminal_pages
+                for line in (
+                    "[[notion.terminals]]",
+                    f"page_id = {_toml_string(page.page_id)}",
+                    f"terminal_block_id = {_toml_string(page.terminal_block_id)}",
+                    f"input_block_id = {_toml_string(page.input_block_id)}",
+                    f"page_url = {_toml_string(page.page_url)}",
+                    "",
+                )
+            ],
             "[terminal]",
             f"shell = {_toml_string(config.terminal.shell)}",
             f"cwd = {_toml_string(config.terminal.cwd)}",
             f"user = {_toml_string(config.terminal.user)}",
             f"host = {_toml_string(config.terminal.host)}",
+            f"count = {config.terminal.count}",
+            f"names = {_toml_list(config.terminal.names)}",
             f"input_prompt = {_toml_string(config.terminal.input_prompt)}",
             f"columns = {config.terminal.columns}",
             f"rows = {config.terminal.rows}",
@@ -301,6 +363,23 @@ def write_config(config: AppConfig, path: Path | str = DEFAULT_CONFIG_PATH) -> P
     return config_path
 
 
+def _terminal_names(count: int, raw_names: object) -> list[str]:
+    if count < 1 or count > 16:
+        raise ValueError("terminal.count must be between 1 and 16")
+
+    provided = _str_list(raw_names)
+    defaults = (
+        ["Terminal4GPTWeb"]
+        if count == 1
+        else [f"Terminal4GPTWeb {index}" for index in range(1, count + 1)]
+    )
+    names: list[str] = []
+    for index in range(count):
+        value = provided[index].strip() if index < len(provided) else ""
+        names.append(value or defaults[index])
+    return names
+
+
 def _required(raw: dict, key: str) -> str:
     value = str(raw.get(key, "")).strip()
     if not value:
@@ -309,6 +388,15 @@ def _required(raw: dict, key: str) -> str:
 
 
 def _validate_terminal(settings: TerminalSettings) -> None:
+    if settings.count < 1 or settings.count > 16:
+        raise ValueError("terminal.count must be between 1 and 16")
+    if len(settings.names) != settings.count:
+        raise ValueError("terminal.names must contain exactly terminal.count names")
+    normalized_names = [name.strip() for name in settings.names]
+    if any(not _single_line(name) for name in normalized_names):
+        raise ValueError("terminal.names entries must be non-empty single-line strings")
+    if len({name.casefold() for name in normalized_names}) != len(normalized_names):
+        raise ValueError("terminal.names entries must be unique")
     if "\n" in settings.input_prompt or "\r" in settings.input_prompt:
         raise ValueError("terminal.input_prompt must be a single line")
     if settings.columns < 20 or settings.columns > 400:
