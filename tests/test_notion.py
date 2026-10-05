@@ -227,6 +227,8 @@ def test_terminal_page_children_are_compact():
     assert "For AI: Read the Terminal4GPTWeb Help page before using this control surface." in text
     assert "Input is executed only when the text ends with a newline" in text
     assert "Quick Commands" in text
+    assert "Browser commands" in text
+    assert "first configured terminal page only" in text
     assert "Browser open" in text
     assert "Save current browser view" in text
     assert "Save long page as one full-width image" in text
@@ -242,6 +244,9 @@ def test_help_page_contains_agent_commands_and_recovery():
         if item.get("type") in {"paragraph", "bulleted_list_item", "heading_2", "callout"}
         and item.get(item.get("type", ""), {}).get("rich_text")
     )
+    assert "Multiple Terminals" in text
+    assert "terminal.count" in text
+    assert "first configured terminal page only" in text
     assert "For GPT / Agents" in text
     assert "Input submission rule" in text
     assert "command stays visible in Input" in text
