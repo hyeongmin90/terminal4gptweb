@@ -813,7 +813,22 @@ t4g daemon restart
 
 ### Multiple terminals
 
-`terminal.count` controls how many persistent PTYs the daemon keeps (default: `1`). `terminal.names` assigns the Notion child-page name for each PTY. One daemon multiplexes all configured PTYs; Browser / Vision commands remain on the first terminal page.
+`terminal.count` controls how many persistent PTYs the daemon keeps (default: `1`). `terminal.names` assigns the Notion child-page name for each PTY.
+
+```toml
+[terminal]
+count = 3
+names = ["Shell", "Server", "Tests"]
+```
+
+One daemon multiplexes all configured PTYs and creates named sibling control pages directly under the selected Notion parent. Legacy single-terminal configs remain compatible.
+
+- Increasing `count` creates missing terminal pages on the next daemon start.
+- Renaming entries updates the active page titles on restart.
+- Decreasing `count` does not delete old Notion pages; only the first configured count remains active.
+- Playwright Browser / Vision surfaces and `:b` commands remain on the first terminal page.
+- cwd, TUI/REPL state, input, output, and resize state are independent for each PTY.
+- Input polling is round-robin paced to avoid consuming the Notion API request budget too aggressively; with more terminals, each page is polled less frequently.
 
 ## Diagnostics
 
