@@ -9,6 +9,7 @@ from terminal4gptweb.config import (
     DEFAULT_CONFIG_PATH,
     NotionSettings,
     SandboxSettings,
+    TerminalPageSettings,
     TerminalSettings,
     load_config,
     write_config,
@@ -32,12 +33,28 @@ def test_config_round_trip(tmp_path: Path):
             parent_page_id="parent",
             help_page_id="help",
             help_page_url="https://notion.so/help",
+            terminal_pages=[
+                TerminalPageSettings(
+                    page_id="page",
+                    terminal_block_id="terminal",
+                    input_block_id="input",
+                    page_url="https://notion.so/test",
+                ),
+                TerminalPageSettings(
+                    page_id="page-2",
+                    terminal_block_id="terminal-2",
+                    input_block_id="input-2",
+                    page_url="https://notion.so/test-2",
+                ),
+            ],
         ),
         terminal=TerminalSettings(
             shell="/bin/bash",
             cwd="/tmp",
             user="user",
             host="ubuntu",
+            count=2,
+            names=["Local", "Server"],
             input_prompt="",
             columns=100,
             rows=30,
@@ -83,6 +100,10 @@ def test_config_round_trip(tmp_path: Path):
     assert loaded.notion.parent_page_id == "parent"
     assert loaded.notion.help_page_id == "help"
     assert loaded.notion.help_page_url == "https://notion.so/help"
+    assert len(loaded.notion.terminal_pages) == 2
+    assert loaded.notion.terminal_pages[1].page_id == "page-2"
+    assert loaded.terminal.count == 2
+    assert loaded.terminal.names == ["Local", "Server"]
     assert loaded.terminal.input_prompt == ""
     assert loaded.terminal.columns == 100
     assert loaded.terminal.rows == 30
@@ -141,6 +162,10 @@ cwd = "/tmp"
 
     loaded = load_config(path)
     assert loaded.terminal.input_prompt == ""
+    assert loaded.terminal.count == 1
+    assert loaded.terminal.names == ["Terminal4GPTWeb"]
+    assert len(loaded.notion.terminal_pages) == 1
+    assert loaded.notion.terminal_pages[0].page_id == "page"
     assert loaded.terminal.rows == 60
     assert loaded.terminal.sandbox.enabled is False
     assert loaded.terminal.sandbox.read_only is False
@@ -418,3 +443,53 @@ def test_domain_entries_must_not_contain_spaces(tmp_path: Path):
 enabled = true
 allowed_domains = ["github.com pypi.org"]
 """)
+
+
+def test_multi_terminal_defaults_generate_distinct_names(tmp_path: Path):
+    path = tmp_path / "config.toml"
+    path.write_text(
+        """
+[notion]
+token = "secret_test"
+page_id = "page"
+terminal_block_id = "terminal"
+input_block_id = "input"
+parent_page_id = "parent"
+
+[terminal]
+count = 3
+shell = "/bin/bash"
+cwd = "/tmp"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    loaded = load_config(path)
+    assert loaded.terminal.count == 3
+    assert loaded.terminal.names == [
+        "Terminal4GPTWeb 1",
+        "Terminal4GPTWeb 2",
+        "Terminal4GPTWeb 3",
+    ]
+    assert len(loaded.notion.terminal_pages) == 1
+
+
+def test_multi_terminal_names_must_be_unique(tmp_path: Path):
+    path = tmp_path / "config.toml"
+    path.write_text(
+        """
+[notion]
+token = "secret_test"
+page_id = "page"
+terminal_block_id = "terminal"
+input_block_id = "input"
+
+[terminal]
+count = 2
+names = ["Work", "work"]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unique"):
+        load_config(path)
