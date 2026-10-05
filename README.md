@@ -826,6 +826,7 @@ daemon 하나가 설정된 수만큼 독립 PTY를 띄우고, 선택한 Notion �
 - `count`를 줄여도 기존 페이지를 자동 삭제하지 않으며 앞에서부터 설정된 수만 활성화합니다.
 - Playwright Browser / Vision surface와 `:b` 명령은 첫 번째 터미널 페이지에서만 사용합니다.
 - 각 PTY의 cwd, TUI/REPL 상태, 입력/출력은 서로 독립적으로 유지됩니다.
+- Input polling은 Notion API 요청 한도를 과도하게 소모하지 않도록 터미널별 round-robin으로 분산됩니다. 1~2개에서는 기존 기본 지연을 유지하고, 터미널 수가 많아지면 각 페이지의 polling 주기가 자동으로 늘어납니다.
 
 `[sandbox]` 항목 설명은 [PTY sandbox (srt)](#pty-sandbox-srt)를 참고하세요.
 
