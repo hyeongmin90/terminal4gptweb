@@ -137,6 +137,20 @@ class NotionClient:
                 break
         return pages
 
+    def update_page_title(self, page_id: str, title: str) -> None:
+        self._request(
+            "PATCH",
+            f"/pages/{page_id}",
+            json={
+                "properties": {
+                    "title": {
+                        "type": "title",
+                        "title": [{"type": "text", "text": {"content": title}}],
+                    }
+                }
+            },
+        )
+
     def get_block(self, block_id: str) -> dict[str, Any]:
         return self._request("GET", f"/blocks/{block_id}")
 
