@@ -1,5 +1,5 @@
 from terminal4gptweb.config import AppConfig, NotionSettings, TerminalPageSettings, TerminalSettings
-from terminal4gptweb.daemon import TerminalDaemon, sanitize_terminal_for_notion
+from terminal4gptweb.daemon import TerminalDaemon, input_poll_slot, sanitize_terminal_for_notion
 
 
 def test_sanitize_terminal_for_notion_leaves_normal_text_unchanged():
@@ -114,3 +114,11 @@ def test_legacy_single_terminal_adopts_existing_notion_page_title(tmp_path):
         daemon.selector.close()
         daemon.browser.close()
         daemon.notion.close()
+
+
+
+def test_input_poll_slot_preserves_single_terminal_interval_and_throttles_many():
+    assert input_poll_slot(1, 1.2) == 1.2
+    assert input_poll_slot(2, 1.2) == 0.6
+    assert input_poll_slot(3, 1.2) == 0.6
+    assert input_poll_slot(8, 1.2) == 0.6
