@@ -756,6 +756,8 @@ shell = "/bin/bash"
 cwd = "/home/user"
 user = "user"
 host = "ubuntu"
+count = 3
+names = ["Shell", "Server", "Tests"]
 input_prompt = ""
 columns = 120
 rows = 60
@@ -806,6 +808,24 @@ vision_max_base64_chars = 160000
 ```
 
 환경변수 `NOTION_TOKEN`이 있으면 config의 token보다 우선합니다.
+
+### 다중 터미널
+
+`terminal.count`는 동시에 유지할 PTY 수이며 기본값은 `1`입니다. `terminal.names`는 각 PTY에 대응하는 Notion 자식 페이지 이름입니다.
+
+```toml
+[terminal]
+count = 3
+names = ["Shell", "Server", "Tests"]
+```
+
+daemon 하나가 설정된 수만큼 독립 PTY를 띄우고, 선택한 Notion 부모 페이지 바로 아래에 이름별 제어 페이지를 둡니다. 기존 단일 터미널 config는 자동으로 `count = 1`로 호환됩니다.
+
+- `count`를 늘리고 daemon을 재시작하면 부족한 터미널 페이지를 자동 생성합니다.
+- 이름을 바꾸고 재시작하면 활성 터미널 페이지 제목도 갱신됩니다.
+- `count`를 줄여도 기존 페이지를 자동 삭제하지 않으며 앞에서부터 설정된 수만 활성화합니다.
+- Playwright Browser / Vision surface와 `:b` 명령은 첫 번째 터미널 페이지에서만 사용합니다.
+- 각 PTY의 cwd, TUI/REPL 상태, 입력/출력은 서로 독립적으로 유지됩니다.
 
 `[sandbox]` 항목 설명은 [PTY sandbox (srt)](#pty-sandbox-srt)를 참고하세요.
 
@@ -897,7 +917,6 @@ Notion은 저지연 터미널 전송 프로토콜이 아닙니다.
 - terminal color styling
 - clipboard escape sequence
 - sub-second keystroke streaming
-- multiple simultaneous PTY sessions
 - WSL / Windows 재시작 후 자동 실행
 - srt sandbox 안에서 띄운 서버에 Playwright 브라우저로 접속 ([Sandbox 제약](#sandbox-제약) 참고)
 
