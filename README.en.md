@@ -748,6 +748,8 @@ shell = "/bin/bash"
 cwd = "/home/user"
 user = "user"
 host = "ubuntu"
+count = 3
+names = ["Shell", "Server", "Tests"]
 input_prompt = ""
 columns = 120
 rows = 60
@@ -808,6 +810,10 @@ t4g daemon restart
 ```
 
 ---
+
+### Multiple terminals
+
+`terminal.count` controls how many persistent PTYs the daemon keeps (default: `1`). `terminal.names` assigns the Notion child-page name for each PTY. One daemon multiplexes all configured PTYs; Browser / Vision commands remain on the first terminal page.
 
 ## Diagnostics
 
@@ -887,7 +893,6 @@ Currently not supported as a native Notion terminal experience:
 - terminal color styling
 - clipboard escape sequences
 - sub-second keystroke streaming
-- multiple simultaneous PTY sessions
 - automatic startup after WSL / Windows restart
 - reaching a server started inside the srt sandbox from the Playwright browser (see [Sandbox limitations](#sandbox-limitations))
 
