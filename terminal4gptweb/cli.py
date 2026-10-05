@@ -84,9 +84,18 @@ def main(argv: list[str] | None = None) -> int:
             config = load_config(args.config)
             with InstanceLock():
                 print(f"Terminal4GPTWeb {__version__}")
-                if config.notion.page_url:
-                    print(f"Notion: {config.notion.page_url}")
-                print("Starting persistent PTY in foreground. Press Ctrl-C here to stop.")
+                pages = config.notion.terminal_pages[: config.terminal.count]
+                if pages:
+                    print("Notion terminal pages:")
+                    for index, page in enumerate(pages):
+                        print(
+                            f"  {index + 1}. {config.terminal.names[index]}: "
+                            f"{page.page_url or page.page_id}"
+                        )
+                print(
+                    f"Starting {config.terminal.count} persistent PTY session(s) in foreground. "
+                    "Press Ctrl-C here to stop."
+                )
                 TerminalDaemon(config, config_path=args.config).run()
             return 0
 
@@ -165,21 +174,37 @@ def doctor(config_path: Path) -> int:
 
     try:
         with NotionClient(config.notion.token, api_version=config.notion.api_version) as notion:
-            notion.get_page(config.notion.page_id)
-            terminal = notion.get_block(config.notion.terminal_block_id)
-            input_block = notion.get_block(config.notion.input_block_id)
+            pages = config.notion.terminal_pages[: config.terminal.count]
+            for index, page in enumerate(pages):
+                notion.get_page(page.page_id)
+                terminal = notion.get_block(page.terminal_block_id)
+                input_block = notion.get_block(page.input_block_id)
+                label = config.terminal.names[index]
+                checks.append((
+                    terminal.get("type") == "code" and not terminal.get("archived", False),
+                    f"Terminal block is active: {label}",
+                ))
+                checks.append((
+                    input_block.get("type") == "code" and not input_block.get("archived", False),
+                    f"Input block is active: {label}",
+                ))
+
+            if len(pages) < config.terminal.count:
+                checks.append((
+                    bool(config.notion.parent_page_id),
+                    f"{config.terminal.count - len(pages)} terminal page(s) will be created on next daemon start",
+                ))
+
             browser_status = (
                 notion.get_block(config.notion.browser_status_block_id)
                 if config.notion.browser_status_block_id
                 else None
             )
-        checks.append((terminal.get("type") == "code" and not terminal.get("archived", False), "Terminal block is active"))
-        checks.append((input_block.get("type") == "code" and not input_block.get("archived", False), "Input block is active"))
         if browser_status is not None:
-            checks.append((browser_status.get("type") == "code" and not browser_status.get("archived", False), "Browser Status block is active"))
+            checks.append((browser_status.get("type") == "code" and not browser_status.get("archived", False), "Browser Status block is active on the first terminal page"))
         else:
-            checks.append((True, "Browser Status will be created on next daemon start"))
-        checks.append((True, "Notion page is readable"))
+            checks.append((True, "Browser Status will be created on the first terminal page on next daemon start"))
+        checks.append((True, f"{len(pages)} configured Notion terminal page(s) are readable"))
     except NotionError as exc:
         checks.append((False, f"Notion access: {exc}"))
 
