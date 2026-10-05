@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .browser import BrowserController, BrowserError, BrowserObservation, parse_browser_command
 from .config import AppConfig, DEFAULT_CONFIG_PATH, TerminalPageSettings, write_config
-from .notion import NotionClient, NotionError
+from .notion import NotionClient, NotionError, page_title
 from .protocol import InputAction, InputKind, extract_submission
 from .sandbox import SandboxUnavailableError
 from .terminal import PTYSession
