@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import selectors
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import signal
 import time
 from pathlib import Path
@@ -107,7 +107,10 @@ class TerminalDaemon:
                 index=index,
                 name=self.config.terminal.names[index],
                 page=page,
-                session=PTYSession(self.config.terminal),
+                # PTYSession.resize() mutates TerminalSettings. Give every
+                # terminal its own settings object so resizing one PTY cannot
+                # change another PTY's render dimensions.
+                session=PTYSession(replace(self.config.terminal)),
             )
             for index, page in enumerate(
                 self.config.notion.terminal_pages[: self.config.terminal.count]
