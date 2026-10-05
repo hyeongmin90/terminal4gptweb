@@ -58,3 +58,59 @@ def test_multi_terminal_sessions_have_independent_terminal_settings(tmp_path):
         daemon.selector.close()
         daemon.browser.close()
         daemon.notion.close()
+
+
+
+class _LegacyTitleNotion:
+    def __init__(self, title):
+        self.title = title
+        self.updated = []
+
+    def get_page(self, page_id):
+        return {
+            "id": page_id,
+            "properties": {
+                "title": {
+                    "type": "title",
+                    "title": [{"plain_text": self.title}],
+                }
+            },
+        }
+
+    def update_page_title(self, page_id, title):
+        self.updated.append((page_id, title))
+
+    def close(self):
+        pass
+
+
+def test_legacy_single_terminal_adopts_existing_notion_page_title(tmp_path):
+    page = TerminalPageSettings("page-1", "terminal-1", "input-1")
+    config = AppConfig(
+        notion=NotionSettings(
+            token="test",
+            page_id=page.page_id,
+            terminal_block_id=page.terminal_block_id,
+            input_block_id=page.input_block_id,
+            terminal_pages=[page],
+        ),
+        terminal=TerminalSettings(
+            cwd=str(tmp_path),
+            count=1,
+            names=["Terminal4GPTWeb"],
+            names_explicit=False,
+        ),
+    )
+
+    daemon = TerminalDaemon(config)
+    daemon.notion.close()
+    fake = _LegacyTitleNotion("My Existing Terminal")
+    daemon.notion = fake
+    try:
+        daemon._ensure_terminal_pages()
+        assert config.terminal.names == ["My Existing Terminal"]
+        assert fake.updated == [("page-1", "My Existing Terminal")]
+    finally:
+        daemon.selector.close()
+        daemon.browser.close()
+        daemon.notion.close()
