@@ -819,14 +819,18 @@ count = 3
 names = ["Shell", "Server", "Tests"]
 ```
 
-daemon 하나가 설정된 수만큼 독립 PTY를 띄우고, 선택한 Notion 부모 페이지 바로 아래에 이름별 제어 페이지를 둡니다. 기존 단일 터미널 config는 자동으로 `count = 1`로 호환됩니다.
+daemon 하나가 설정된 수만큼 독립 PTY를 띄우고, 선택한 Notion 부모 페이지 바로 아래에 이름별 제어 페이지를 둡니다. `count`는 1~16 범위이며 기본값은 `1`입니다. `names`는 활성 터미널 수만큼 사용되고 페이지 이름은 서로 달라야 합니다.
 
-- `count`를 늘리고 daemon을 재시작하면 부족한 터미널 페이지를 자동 생성합니다.
+- 기존 단일 터미널 config는 별도 마이그레이션 작업 없이 `count = 1`로 동작합니다. 이전에 사용자가 지정한 기존 Notion 터미널 페이지 제목도 첫 실행에서 보존합니다.
+- `count`를 늘리고 daemon을 재시작하면 부족한 터미널 페이지를 같은 부모 아래에 자동 생성하고 config의 `[[notion.terminals]]` 목록을 갱신합니다.
 - 이름을 바꾸고 재시작하면 활성 터미널 페이지 제목도 갱신됩니다.
-- `count`를 줄여도 기존 페이지를 자동 삭제하지 않으며 앞에서부터 설정된 수만 활성화합니다.
-- Playwright Browser / Vision surface와 `:b` 명령은 첫 번째 터미널 페이지에서만 사용합니다.
-- 각 PTY의 cwd, TUI/REPL 상태, 입력/출력은 서로 독립적으로 유지됩니다.
-- Input polling은 Notion API 요청 한도를 과도하게 소모하지 않도록 터미널별 round-robin으로 분산됩니다. 1~2개에서는 기존 기본 지연을 유지하고, 터미널 수가 많아지면 각 페이지의 polling 주기가 자동으로 늘어납니다.
+- `count`를 줄여도 기존 Notion 페이지를 자동 삭제하지 않습니다. 앞에서부터 설정된 수만 활성화되므로 다시 늘릴 때 기존 페이지를 재사용할 수 있습니다.
+- 각 PTY는 프로세스, cwd, TUI/REPL 상태, 화면 버퍼, 입력/출력, resize 상태를 독립적으로 유지합니다. 한 터미널의 `:resize`는 다른 터미널 크기에 영향을 주지 않습니다.
+- 한 PTY가 종료되어도 다른 PTY는 계속 실행되며, Terminal/Input block 복구도 페이지별로 독립적으로 처리합니다.
+- Playwright Browser / Vision surface와 `:b` 명령은 **첫 번째 터미널 페이지에서만** 사용합니다.
+- Input polling은 터미널별 round-robin으로 분산하고 health check도 순환시켜 Notion API 요청량이 터미널 수에 비례해 급증하지 않도록 합니다. 터미널 수가 많아질수록 각 페이지의 polling 주기는 자동으로 늘어납니다.
+
+`[[notion.terminals]]`의 page/block ID는 daemon이 생성·복구하면서 관리하는 런타임 값이므로 일반적으로 직접 편집할 필요가 없습니다.
 
 `[sandbox]` 항목 설명은 [PTY sandbox (srt)](#pty-sandbox-srt)를 참고하세요.
 
