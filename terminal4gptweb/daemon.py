@@ -101,7 +101,14 @@ class TerminalDaemon:
 
         active_pages = pages[: self.config.terminal.count]
         for index, page in enumerate(active_pages):
-            self.notion.get_page(page.page_id)
+            notion_page = self.notion.get_page(page.page_id)
+            if index == 0 and not self.config.terminal.names_explicit:
+                # Legacy configs did not persist the user-selected page title.
+                # Adopt the current Notion title instead of silently renaming it
+                # to the new default on the first multi-terminal-aware start.
+                existing_title = page_title(notion_page)
+                if existing_title:
+                    self.config.terminal.names[0] = existing_title
             self.notion.update_page_title(page.page_id, self.config.terminal.names[index])
 
         primary = active_pages[0]
