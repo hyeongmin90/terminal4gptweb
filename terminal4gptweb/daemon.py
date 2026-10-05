@@ -27,7 +27,13 @@ class TerminalRuntime:
     ended_reported: bool = False
 
 
+# Keep routine Input polling below the standard Notion connection budget and
+# leave headroom for terminal renders, health checks, and browser updates.
 MIN_INPUT_POLL_SLOT = 0.6
+
+
+def input_poll_slot(count: int, poll_interval: float) -> float:
+    return max(poll_interval / count, MIN_INPUT_POLL_SLOT)
 
 
 class TerminalDaemon:
@@ -144,8 +150,6 @@ class TerminalDaemon:
                 raise
 
             self._health_check()
-            self._ensure_browser_blocks()
-            self._ensure_browser_vision_page()
             self._reset_browser_surface()
             for runtime in self.runtimes:
                 self._reset_input(runtime)
@@ -154,9 +158,9 @@ class TerminalDaemon:
             now = time.monotonic()
             poll_cursor = 0
             health_cursor = 0
-            poll_slot = max(
-                self.config.terminal.poll_interval / len(self.runtimes),
-                MIN_INPUT_POLL_SLOT,
+            poll_slot = input_poll_slot(
+                len(self.runtimes),
+                self.config.terminal.poll_interval,
             )
             next_poll = now
             next_render = now
