@@ -27,6 +27,9 @@ class TerminalRuntime:
     ended_reported: bool = False
 
 
+MIN_INPUT_POLL_SLOT = 0.6
+
+
 class TerminalDaemon:
     def __init__(
         self,
@@ -149,6 +152,12 @@ class TerminalDaemon:
                 self._write_terminal(runtime, force=True)
 
             now = time.monotonic()
+            poll_cursor = 0
+            health_cursor = 0
+            poll_slot = max(
+                self.config.terminal.poll_interval / len(self.runtimes),
+                MIN_INPUT_POLL_SLOT,
+            )
             next_poll = now
             next_render = now
             next_health = now + self.config.terminal.health_check_interval
@@ -167,10 +176,11 @@ class TerminalDaemon:
 
                 now = time.monotonic()
                 if now >= next_poll:
-                    for runtime in self.runtimes:
-                        if runtime.session.is_alive():
-                            self._poll_input(runtime)
-                    next_poll = now + self.config.terminal.poll_interval
+                    runtime = self.runtimes[poll_cursor]
+                    if runtime.session.is_alive():
+                        self._poll_input(runtime)
+                    poll_cursor = (poll_cursor + 1) % len(self.runtimes)
+                    next_poll = now + poll_slot
 
                 if now >= next_render:
                     for runtime in self.runtimes:
@@ -182,7 +192,11 @@ class TerminalDaemon:
                         self._mark_session_ended(runtime)
 
                 if now >= next_health:
-                    self._health_check()
+                    runtime = self.runtimes[health_cursor]
+                    self._health_check_runtime(runtime)
+                    if health_cursor == 0:
+                        self._health_check_browser()
+                    health_cursor = (health_cursor + 1) % len(self.runtimes)
                     next_health = now + self.config.terminal.health_check_interval
 
             if self._stop_requested:
@@ -668,16 +682,21 @@ class TerminalDaemon:
 
     def _health_check(self) -> None:
         for runtime in self.runtimes:
-            try:
-                self._ensure_runtime_blocks(runtime)
-            except NotionError as exc:
-                if exc.is_not_found:
-                    raise RuntimeError(
-                        f"The Notion terminal page {runtime.name!r} no longer exists or "
-                        "is not accessible. Run `t4g reinit` if the page was deleted."
-                    ) from exc
-                print(f"[notion:{runtime.name}] runtime block health check failed: {exc}")
+            self._health_check_runtime(runtime)
+        self._health_check_browser()
 
+    def _health_check_runtime(self, runtime: TerminalRuntime) -> None:
+        try:
+            self._ensure_runtime_blocks(runtime)
+        except NotionError as exc:
+            if exc.is_not_found:
+                raise RuntimeError(
+                    f"The Notion terminal page {runtime.name!r} no longer exists or "
+                    "is not accessible. Run `t4g reinit` if the page was deleted."
+                ) from exc
+            print(f"[notion:{runtime.name}] runtime block health check failed: {exc}")
+
+    def _health_check_browser(self) -> None:
         try:
             self._ensure_browser_blocks()
             self._ensure_browser_vision_page()
