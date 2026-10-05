@@ -104,6 +104,7 @@ def test_config_round_trip(tmp_path: Path):
     assert loaded.notion.terminal_pages[1].page_id == "page-2"
     assert loaded.terminal.count == 2
     assert loaded.terminal.names == ["Local", "Server"]
+    assert loaded.terminal.names_explicit is True
     assert loaded.terminal.input_prompt == ""
     assert loaded.terminal.columns == 100
     assert loaded.terminal.rows == 30
@@ -164,6 +165,7 @@ cwd = "/tmp"
     assert loaded.terminal.input_prompt == ""
     assert loaded.terminal.count == 1
     assert loaded.terminal.names == ["Terminal4GPTWeb"]
+    assert loaded.terminal.names_explicit is False
     assert len(loaded.notion.terminal_pages) == 1
     assert loaded.notion.terminal_pages[0].page_id == "page"
     assert loaded.terminal.rows == 60
