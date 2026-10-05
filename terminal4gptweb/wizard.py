@@ -55,6 +55,7 @@ def run_init(config_path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         host=host,
         count=count,
         names=names,
+        names_explicit=True,
         input_prompt="",
         columns=columns,
         rows=rows,
