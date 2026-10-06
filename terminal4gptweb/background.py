@@ -219,7 +219,9 @@ def process_is_our_daemon(pid: int) -> bool:
     try:
         cmdline = cmdline_path.read_bytes().replace(b"\x00", b" ").decode("utf-8", "replace")
     except OSError:
-        return True
+        # A stale PID file may now point at an unrelated process. If /proc
+        # cannot prove ownership, fail closed and never signal that PID.
+        return False
 
     return (
         (" terminal4gptweb " in f" {cmdline} " or " notion_is_terminal " in f" {cmdline} ")

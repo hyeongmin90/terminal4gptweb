@@ -171,6 +171,43 @@ playwright install --with-deps chromium
 
 The terminal bridge still works without using the browser feature.
 
+## 7. Optional: enable systemd user auto-start
+
+Terminal4GPTWeb includes `contrib/systemd/terminal4gptweb.service` for WSL and regular Linux systems that use systemd.
+
+The supplied unit assumes the default installation layout from this guide:
+
+```text
+~/terminal4gptweb/.venv/bin/t4g
+```
+
+Install and enable it with:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/terminal4gptweb.service ~/.config/systemd/user/
+
+# Avoid two t4g instances competing for the same lock.
+t4g daemon stop
+
+systemctl --user daemon-reload
+systemctl --user enable --now terminal4gptweb
+systemctl --user status terminal4gptweb
+```
+
+If your checkout or virtual environment is elsewhere, run `which t4g` while the intended environment is active and replace the unit's `ExecStart` path before enabling it.
+
+Logs are available through:
+
+```bash
+journalctl --user -u terminal4gptweb
+journalctl --user -u terminal4gptweb -f
+```
+
+When sandbox mode is enabled and `srt` is installed through a user-managed PATH such as nvm, systemd may not inherit that PATH. Use `which srt` and set `sandbox.srt_path` in `config.toml` to the absolute executable path.
+
+On WSL, this starts Terminal4GPTWeb when WSL/user systemd starts; it does not cause Windows to launch WSL at boot. On a regular Linux server, `loginctl enable-linger "$USER"` can be used when the user service must start without an interactive login.
+
 ## 7. Run the setup wizard
 
 ```bash

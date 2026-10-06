@@ -205,6 +205,43 @@ playwright install --with-deps chromium
 
 Browser 기능을 쓰지 않더라도 Terminal 기능 자체는 사용할 수 있습니다.
 
+## 7. 선택: systemd user service 자동 시작
+
+Terminal4GPTWeb은 systemd를 사용하는 WSL과 일반 Linux를 위해 `contrib/systemd/terminal4gptweb.service`를 제공합니다.
+
+제공되는 unit은 이 문서의 기본 설치 경로를 기준으로 합니다.
+
+```text
+~/terminal4gptweb/.venv/bin/t4g
+```
+
+설치하고 자동 시작을 활성화하려면:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/terminal4gptweb.service ~/.config/systemd/user/
+
+# 같은 instance lock을 두 프로세스가 사용하지 않도록 기존 detached daemon 중지
+t4g daemon stop
+
+systemctl --user daemon-reload
+systemctl --user enable --now terminal4gptweb
+systemctl --user status terminal4gptweb
+```
+
+저장소나 가상환경 위치가 다르면 사용할 환경에서 `which t4g`로 실제 경로를 확인한 뒤, enable 전에 unit의 `ExecStart`를 해당 경로로 수정합니다.
+
+systemd로 실행할 때 로그는 journal에서 확인합니다.
+
+```bash
+journalctl --user -u terminal4gptweb
+journalctl --user -u terminal4gptweb -f
+```
+
+sandbox를 사용하면서 `srt`를 nvm 등 사용자 전용 PATH에 설치했다면 systemd user service에서는 해당 경로를 자동으로 상속하지 못할 수 있습니다. `which srt`로 경로를 확인한 뒤 `config.toml`의 `sandbox.srt_path`에 절대 경로를 지정하면 됩니다.
+
+WSL에서는 WSL/user systemd가 시작될 때 Terminal4GPTWeb이 함께 시작됩니다. 이 설정 자체가 Windows 부팅 시 WSL을 실행시키는 것은 아닙니다. 일반 Linux 서버에서 사용자가 로그인하지 않아도 user service가 부팅 후 실행되어야 한다면 필요에 따라 `loginctl enable-linger "$USER"`를 사용할 수 있습니다.
+
 ## 7. 최초 초기화
 
 ```bash

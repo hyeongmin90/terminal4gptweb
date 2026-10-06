@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
 from terminal4gptweb.config import AppConfig, NotionSettings, TerminalPageSettings, TerminalSettings
-from terminal4gptweb.daemon import TerminalDaemon, input_poll_slot, sanitize_terminal_for_notion
+from terminal4gptweb.daemon import TerminalDaemon, TerminalRuntime, input_poll_slot, sanitize_terminal_for_notion
+from terminal4gptweb.notion import NotionError
 
 
 def test_sanitize_terminal_for_notion_leaves_normal_text_unchanged():
@@ -167,6 +168,92 @@ def test_legacy_title_is_persisted_after_multi_terminal_page_expansion(tmp_path)
         assert 'names = ["My Existing Terminal", "Terminal4GPTWeb 2"]' in written
         assert "[[notion.terminals]]" in written
         assert 'page_id = "page-2"' in written
+    finally:
+        daemon.selector.close()
+        daemon.browser.close()
+        daemon.notion.close()
+
+
+
+class _InputNotion:
+    def __init__(self, text: str, *, fail_resets: int = 0):
+        self.text = text
+        self.fail_resets = fail_resets
+        self.reset_calls = 0
+
+    def get_code_text(self, _block_id):
+        return self.text
+
+    def update_code_block(self, _block_id, text, *, language):
+        self.reset_calls += 1
+        if self.fail_resets:
+            self.fail_resets -= 1
+            raise NotionError("temporary failure", status_code=503)
+        self.text = text
+
+    def close(self):
+        pass
+
+
+class _InputSession:
+    def __init__(self):
+        self.lines = []
+
+    def send_line(self, value):
+        self.lines.append(value)
+
+
+def _input_runtime(tmp_path, text: str):
+    page = TerminalPageSettings("page-1", "terminal-1", "input-1")
+    config = AppConfig(
+        notion=NotionSettings(
+            token="test",
+            page_id=page.page_id,
+            terminal_block_id=page.terminal_block_id,
+            input_block_id=page.input_block_id,
+            terminal_pages=[page],
+        ),
+        terminal=TerminalSettings(cwd=str(tmp_path)),
+    )
+    daemon = TerminalDaemon(config)
+    daemon.notion.close()
+    runtime = TerminalRuntime(
+        index=0,
+        name="Terminal4GPTWeb",
+        page=page,
+        session=_InputSession(),
+    )
+    return daemon, runtime
+
+
+def test_input_reset_failure_does_not_dispatch_same_submission_twice(tmp_path):
+    daemon, runtime = _input_runtime(tmp_path, "echo once\n")
+    fake = _InputNotion("echo once\n", fail_resets=1)
+    daemon.notion = fake
+    try:
+        daemon._poll_input(runtime)
+        assert runtime.session.lines == ["echo once"]
+        assert runtime.last_submission == "echo once\n"
+
+        daemon._poll_input(runtime)
+        assert runtime.session.lines == ["echo once"]
+        assert fake.text == ""
+        assert runtime.last_submission == ""
+    finally:
+        daemon.selector.close()
+        daemon.browser.close()
+        daemon.notion.close()
+
+
+def test_malformed_input_is_reset_without_crashing_daemon(tmp_path):
+    daemon, runtime = _input_runtime(tmp_path, ":resize nope\n")
+    fake = _InputNotion(":resize nope\n")
+    daemon.notion = fake
+    try:
+        daemon._poll_input(runtime)
+        assert runtime.session.lines == []
+        assert fake.text == ""
+        assert runtime.last_submission == ""
     finally:
         daemon.selector.close()
         daemon.browser.close()

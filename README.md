@@ -479,7 +479,46 @@ runtime 파일:
 
 WSL 터미널 창을 닫아도 daemon은 계속 실행됩니다.
 
-단, 현재는 WSL 자체가 종료되거나 Windows를 재부팅했을 때 자동으로 다시 실행되지는 않습니다.
+### systemd user service로 자동 시작
+
+WSL 또는 일반 Linux에서 systemd를 사용한다면 저장소에 포함된 user unit으로 로그인/WSL 시작 시 Terminal4GPTWeb을 자동 실행할 수 있습니다.
+
+기본 unit은 README의 설치 절차대로 저장소가 `~/terminal4gptweb`, 가상환경이 `.venv`에 있다고 가정합니다.
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/terminal4gptweb.service ~/.config/systemd/user/
+
+# detached daemon이 이미 실행 중이면 먼저 중지
+t4g daemon stop
+
+systemctl --user daemon-reload
+systemctl --user enable --now terminal4gptweb
+systemctl --user status terminal4gptweb
+```
+
+다른 경로에 설치했다면 `~/.config/systemd/user/terminal4gptweb.service`의 `ExecStart`를 실제 `t4g` 경로로 수정합니다.
+
+```bash
+which t4g
+```
+
+로그는 systemd journal에서 확인합니다.
+
+```bash
+journalctl --user -u terminal4gptweb
+journalctl --user -u terminal4gptweb -f
+```
+
+sandbox를 사용하고 `srt`를 nvm 같은 사용자 전용 PATH에 설치했다면, 대화형 셸에서는 보이지만 systemd user service에서는 찾지 못할 수 있습니다. 이 경우 `which srt`로 실제 경로를 확인해 `config.toml`의 `sandbox.srt_path`에 절대 경로를 지정합니다.
+
+이 방식은 WSL 전용이 아니라 systemd를 사용하는 일반 Linux에서도 동일하게 동작합니다. WSL에서는 **WSL 인스턴스가 시작될 때** user service가 올라오는 것이며, Windows 부팅만으로 WSL 자체를 시작시키는 기능은 포함하지 않습니다.
+
+일반 Linux 서버에서 로그인하지 않은 상태에서도 부팅 직후 user service를 실행해야 한다면 필요에 따라 linger를 활성화할 수 있습니다.
+
+```bash
+loginctl enable-linger "$USER"
+```
 
 디버깅할 때는 foreground 실행도 가능합니다.
 

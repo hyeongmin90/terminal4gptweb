@@ -1,0 +1,13 @@
+[Unit]
+Description=Terminal4GPTWeb persistent terminal and browser bridge
+Documentation=https://github.com/hyeongmin90/terminal4gptweb
+
+[Service]
+Type=simple
+ExecStart=%h/terminal4gptweb/.venv/bin/t4g run
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
