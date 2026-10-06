@@ -192,7 +192,7 @@ Terminal4GPTWeb deliberately prevents routine API traffic from growing without b
 - Runtime health checks are staggered across terminals, and Browser health checks run only on the first-terminal cycle.
 - Terminal renders, Browser/Vision actions, and block recovery can create additional requests, so the polling figure is not a hard cap on all API traffic.
 
-When Notion returns 429 or 529, t4g respects `Retry-After` and retries only a bounded number of times. Idempotent GET/DELETE requests may also retry transient 5xx responses with backoff. POST/PATCH writes are not automatically retried on ambiguous 503-class failures because Notion may already have committed the write; this avoids duplicate block creation or updates.
+When Notion returns 429 or 529, t4g respects `Retry-After` and retries only a bounded number of times. Idempotent GET/DELETE requests may also retry transient 5xx responses with backoff. POST/PATCH writes are not automatically retried on ambiguous transient 5xx failures. In particular, a 503 can be returned even when Notion already committed the write, so avoiding a blind retry prevents duplicate block creation or updates.
 
 ### 3. Install the local package
 
