@@ -175,6 +175,27 @@ Notion 공식 문서:
 - https://developers.notion.com/guides/get-started/quick-start
 - https://developers.notion.com/guides/get-started/internal-connections
 
+#### Notion API rate limit과 polling
+
+Notion API에는 **connection 단위 제한**과 **workspace 전체 공유 제한**이 있습니다. 현재 공식 문서 기준 connection 제한은 다음과 같습니다.
+
+| Workspace plan | Connection limit |
+| --- | ---: |
+| Business / Enterprise | 600 requests/minute (평균 10 req/s) |
+| 그 외 plan | 180 requests/minute (평균 3 req/s) |
+
+workspace 공유 한도와 일부 endpoint별 별도 제한도 있으므로, 같은 workspace에서 다른 integration이 많은 요청을 보내면 t4g 자체 요청량이 낮아도 429가 발생할 수 있습니다. 제한 수치는 변경될 수 있으므로 최신 값은 [Notion Request limits](https://developers.notion.com/reference/request-limits)를 기준으로 확인하세요.
+
+Terminal4GPTWeb은 기본 설정에서 API 요청이 terminal 수에 비례해 무제한으로 늘어나지 않도록 제어합니다.
+
+- Input GET polling은 terminal을 **round-robin**으로 한 개씩 조회합니다.
+- polling slot은 최소 0.6초라서 routine Input polling 자체는 전체 합계 약 **1.67 req/s 이하**로 제한됩니다.
+- terminal 수가 늘어나면 각 terminal의 실제 polling 간격이 늘어납니다. 예: 기본 `poll_interval = 1.2`에서 1개는 1.2초, 2개는 1.2초, 3개는 약 1.8초, 8개는 약 4.8초 간격입니다.
+- runtime health check도 terminal별로 분산 실행하며, Browser health check는 첫 terminal 주기에만 수행합니다.
+- 화면 갱신, Browser/Vision 작업, block 복구 등은 추가 API 요청을 만들 수 있으므로 위 수치는 전체 API 사용량의 절대 상한은 아닙니다.
+
+Notion이 429 또는 529를 반환하면 t4g는 `Retry-After`를 존중해 제한된 횟수만 재시도합니다. GET/DELETE 같은 idempotent 요청은 일시적인 5xx에도 backoff 후 재시도할 수 있지만, POST/PATCH 쓰기 요청은 503 등에서 이미 반영되었을 가능성이 있으므로 자동 재시도하지 않습니다. 이는 동일 block 생성/수정을 중복 적용하지 않기 위한 동작입니다.
+
 ### 3. 설치
 
 ```bash
