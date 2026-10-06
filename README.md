@@ -510,6 +510,8 @@ journalctl --user -u terminal4gptweb
 journalctl --user -u terminal4gptweb -f
 ```
 
+sandbox를 사용하고 `srt`를 nvm 같은 사용자 전용 PATH에 설치했다면, 대화형 셸에서는 보이지만 systemd user service에서는 찾지 못할 수 있습니다. 이 경우 `which srt`로 실제 경로를 확인해 `config.toml`의 `sandbox.srt_path`에 절대 경로를 지정합니다.
+
 이 방식은 WSL 전용이 아니라 systemd를 사용하는 일반 Linux에서도 동일하게 동작합니다. WSL에서는 **WSL 인스턴스가 시작될 때** user service가 올라오는 것이며, Windows 부팅만으로 WSL 자체를 시작시키는 기능은 포함하지 않습니다.
 
 일반 Linux 서버에서 로그인하지 않은 상태에서도 부팅 직후 user service를 실행해야 한다면 필요에 따라 linger를 활성화할 수 있습니다.
