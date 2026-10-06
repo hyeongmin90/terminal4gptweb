@@ -173,6 +173,27 @@ Official Notion guides:
 - https://developers.notion.com/guides/get-started/quick-start
 - https://developers.notion.com/guides/get-started/internal-connections
 
+#### Notion API rate limits and polling
+
+The Notion API has both **per-connection** limits and **workspace-wide shared** limits. The currently documented per-connection limits are:
+
+| Workspace plan | Connection limit |
+| --- | ---: |
+| Business / Enterprise | 600 requests/minute (10 req/s on average) |
+| All other plans | 180 requests/minute (3 req/s on average) |
+
+A workspace-wide shared budget and endpoint-specific limits can also apply, so t4g may receive a 429 even when its own connection is below the per-connection budget if other integrations are using the same workspace. Limits can change; use [Notion Request limits](https://developers.notion.com/reference/request-limits) as the source of truth.
+
+Terminal4GPTWeb deliberately prevents routine API traffic from growing without bound as more terminals are configured.
+
+- Input GET polling visits terminals **round-robin**, one terminal per polling slot.
+- The polling slot has a 0.6-second floor, keeping routine Input polling itself at about **1.67 req/s or less** in total.
+- As terminal count grows, the effective polling interval per terminal grows. With the default `poll_interval = 1.2`, one terminal is polled every 1.2s, two every 1.2s each, three about every 1.8s each, and eight about every 4.8s each.
+- Runtime health checks are staggered across terminals, and Browser health checks run only on the first-terminal cycle.
+- Terminal renders, Browser/Vision actions, and block recovery can create additional requests, so the polling figure is not a hard cap on all API traffic.
+
+When Notion returns 429 or 529, t4g respects `Retry-After` and retries only a bounded number of times. Idempotent GET/DELETE requests may also retry transient 5xx responses with backoff. POST/PATCH writes are not automatically retried on ambiguous 503-class failures because Notion may already have committed the write; this avoids duplicate block creation or updates.
+
 ### 3. Install the local package
 
 ```bash
