@@ -10,7 +10,7 @@ def test_systemd_user_unit_runs_foreground_daemon() -> None:
     assert "[Service]" in unit
     assert "Type=simple" in unit
     assert "ExecStart=%h/terminal4gptweb/.venv/bin/t4g run" in unit
-    assert "Restart=on-failure" in unit
+    assert "Restart=always" in unit
     assert "WantedBy=default.target" in unit
 
 
