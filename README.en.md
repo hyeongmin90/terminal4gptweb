@@ -471,7 +471,46 @@ Runtime files:
 ~/.cache/notion_is_terminal/instance.lock
 ```
 
-The daemon survives closing the WSL terminal window. It does not currently auto-start after WSL itself shuts down or Windows reboots.
+The detached daemon survives closing the WSL terminal window.
+
+### Auto-start with a systemd user service
+
+On WSL or regular Linux with systemd, you can use the repository-provided user unit to start Terminal4GPTWeb automatically when the user systemd manager starts.
+
+The default unit assumes the installation layout used in this README: the repository is at `~/terminal4gptweb` and its virtual environment is `.venv`.
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/terminal4gptweb.service ~/.config/systemd/user/
+
+# Stop an already-running detached daemon first.
+t4g daemon stop
+
+systemctl --user daemon-reload
+systemctl --user enable --now terminal4gptweb
+systemctl --user status terminal4gptweb
+```
+
+If you installed the project elsewhere, edit `ExecStart` in `~/.config/systemd/user/terminal4gptweb.service` to point to the actual `t4g` executable.
+
+```bash
+which t4g
+```
+
+Use the systemd journal for logs:
+
+```bash
+journalctl --user -u terminal4gptweb
+journalctl --user -u terminal4gptweb -f
+```
+
+This is standard systemd behavior and works on regular Linux as well as WSL. On WSL it starts Terminal4GPTWeb **when the WSL instance/user systemd manager starts**; it does not start WSL itself at Windows boot.
+
+On a regular Linux server where the user service must run before that user logs in, enable lingering if appropriate:
+
+```bash
+loginctl enable-linger "$USER"
+```
 
 Foreground mode is available for debugging:
 
