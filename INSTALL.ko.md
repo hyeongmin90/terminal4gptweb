@@ -238,6 +238,8 @@ journalctl --user -u terminal4gptweb
 journalctl --user -u terminal4gptweb -f
 ```
 
+sandbox를 사용하면서 `srt`를 nvm 등 사용자 전용 PATH에 설치했다면 systemd user service에서는 해당 경로를 자동으로 상속하지 못할 수 있습니다. `which srt`로 경로를 확인한 뒤 `config.toml`의 `sandbox.srt_path`에 절대 경로를 지정하면 됩니다.
+
 WSL에서는 WSL/user systemd가 시작될 때 Terminal4GPTWeb이 함께 시작됩니다. 이 설정 자체가 Windows 부팅 시 WSL을 실행시키는 것은 아닙니다. 일반 Linux 서버에서 사용자가 로그인하지 않아도 user service가 부팅 후 실행되어야 한다면 필요에 따라 `loginctl enable-linger "$USER"`를 사용할 수 있습니다.
 
 ## 7. 최초 초기화
