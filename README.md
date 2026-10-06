@@ -194,7 +194,7 @@ Terminal4GPTWeb은 기본 설정에서 API 요청이 terminal 수에 비례해 �
 - runtime health check도 terminal별로 분산 실행하며, Browser health check는 첫 terminal 주기에만 수행합니다.
 - 화면 갱신, Browser/Vision 작업, block 복구 등은 추가 API 요청을 만들 수 있으므로 위 수치는 전체 API 사용량의 절대 상한은 아닙니다.
 
-Notion이 429 또는 529를 반환하면 t4g는 `Retry-After`를 존중해 제한된 횟수만 재시도합니다. GET/DELETE 같은 idempotent 요청은 일시적인 5xx에도 backoff 후 재시도할 수 있지만, POST/PATCH 쓰기 요청은 503 등에서 이미 반영되었을 가능성이 있으므로 자동 재시도하지 않습니다. 이는 동일 block 생성/수정을 중복 적용하지 않기 위한 동작입니다.
+Notion이 429 또는 529를 반환하면 t4g는 `Retry-After`를 존중해 제한된 횟수만 재시도합니다. GET/DELETE 같은 idempotent 요청은 일시적인 5xx에도 backoff 후 재시도할 수 있지만, POST/PATCH 쓰기 요청은 애매한 일시적 5xx에서 자동 재시도하지 않습니다. 특히 503은 응답만 실패하고 쓰기는 이미 반영되었을 수 있습니다. 이는 동일 block 생성/수정을 중복 적용하지 않기 위한 동작입니다.
 
 ### 3. 설치
 
