@@ -1,3 +1,6 @@
+import httpx
+import pytest
+
 from terminal4gptweb.notion import (
     MAX_RICH_TEXT_CHUNK,
     NotionClient,
@@ -323,3 +326,100 @@ def test_search_pages_blank_query_lists_recent_pages():
     payload = notion.last_request[2]
     assert "query" not in payload
     assert payload["page_size"] == 5
+
+
+
+class _SequenceClient:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def request(self, method, path, json=None):
+        self.calls += 1
+        return self.responses.pop(0)
+
+    def close(self):
+        pass
+
+
+def _response(status, payload, *, headers=None):
+    return httpx.Response(
+        status,
+        json=payload,
+        headers=headers or {},
+        request=httpx.Request("GET", "https://api.notion.com/v1/test"),
+    )
+
+
+def test_get_retries_transient_503(monkeypatch):
+    client = NotionClient("test")
+    client._client.close()
+    fake = _SequenceClient([
+        _response(503, {"code": "service_unavailable", "message": "retry"}),
+        _response(200, {"ok": True}),
+    ])
+    client._client = fake
+    monkeypatch.setattr("terminal4gptweb.notion.time.sleep", lambda _seconds: None)
+
+    assert client._request("GET", "/test") == {"ok": True}
+    assert fake.calls == 2
+
+
+def test_patch_does_not_retry_ambiguous_503(monkeypatch):
+    client = NotionClient("test")
+    client._client.close()
+    fake = _SequenceClient([
+        _response(503, {"code": "service_unavailable", "message": "may already be committed"}),
+        _response(200, {"ok": True}),
+    ])
+    client._client = fake
+    monkeypatch.setattr("terminal4gptweb.notion.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(NotionError, match="503"):
+        client._request("PATCH", "/test", json={"value": 1})
+    assert fake.calls == 1
+
+
+def test_patch_retries_rate_limit_429(monkeypatch):
+    client = NotionClient("test")
+    client._client.close()
+    fake = _SequenceClient([
+        _response(
+            429,
+            {
+                "code": "rate_limited",
+                "message": "slow down",
+                "additional_data": {"rate_limit_reason": "public_api_request_rate_limit"},
+            },
+            headers={"Retry-After": "1"},
+        ),
+        _response(200, {"ok": True}),
+    ])
+    client._client = fake
+    monkeypatch.setattr("terminal4gptweb.notion.time.sleep", lambda _seconds: None)
+
+    assert client._request("PATCH", "/test", json={"value": 1}) == {"ok": True}
+    assert fake.calls == 2
+
+
+def test_blocked_429_is_not_retried(monkeypatch):
+    client = NotionClient("test")
+    client._client.close()
+    fake = _SequenceClient([
+        _response(
+            429,
+            {
+                "code": "rate_limited",
+                "message": "blocked",
+                "additional_data": {"rate_limit_reason": "public_api_request_blocked"},
+            },
+            headers={"Retry-After": "1"},
+        ),
+        _response(200, {"ok": True}),
+    ])
+    client._client = fake
+    monkeypatch.setattr("terminal4gptweb.notion.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(NotionError, match="429"):
+        client._request("PATCH", "/test", json={"value": 1})
+    assert fake.calls == 1

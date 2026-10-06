@@ -786,12 +786,17 @@ class NotionClient:
             raise
 
     def _request(self, method: str, path: str, *, json: dict[str, Any] | None = None) -> dict[str, Any]:
+        method = method.upper()
+        idempotent = method in {"GET", "DELETE"}
         delay = 0.75
+
         for attempt in range(6):
             try:
                 response = self._client.request(method, path, json=json)
             except httpx.HTTPError as exc:
-                if attempt == 5:
+                # A transport failure can happen after a write reached Notion.
+                # Retry only idempotent methods so POST/PATCH cannot be applied twice.
+                if not idempotent or attempt == 5:
                     raise NotionError(f"Notion request failed: {exc}") from exc
                 time.sleep(delay)
                 delay = min(delay * 2, 8.0)
@@ -800,7 +805,31 @@ class NotionClient:
             if response.status_code < 400:
                 return response.json()
 
-            if response.status_code in {429, 503, 504, 529} and attempt < 5:
+            error: dict[str, Any] | None = None
+            try:
+                parsed = response.json()
+                if isinstance(parsed, dict):
+                    error = parsed
+            except ValueError:
+                pass
+
+            rate_limit_reason = ""
+            if error is not None:
+                additional = error.get("additional_data")
+                if isinstance(additional, dict):
+                    rate_limit_reason = str(additional.get("rate_limit_reason", ""))
+
+            retryable = (
+                response.status_code in {429, 529}
+                or (
+                    idempotent
+                    and response.status_code in {500, 502, 503, 504}
+                )
+            )
+            if response.status_code == 429 and rate_limit_reason == "public_api_request_blocked":
+                retryable = False
+
+            if retryable and attempt < 5:
                 retry_after = response.headers.get("Retry-After")
                 try:
                     wait = max(float(retry_after), 0.25) if retry_after else delay
@@ -810,11 +839,10 @@ class NotionClient:
                 delay = min(delay * 2, 8.0)
                 continue
 
-            try:
-                error = response.json()
+            if error is not None:
                 message = error.get("message") or response.text
                 code = error.get("code")
-            except ValueError:
+            else:
                 message = response.text
                 code = None
             suffix = f" ({code})" if code else ""
