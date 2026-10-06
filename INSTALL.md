@@ -204,6 +204,8 @@ journalctl --user -u terminal4gptweb
 journalctl --user -u terminal4gptweb -f
 ```
 
+When sandbox mode is enabled and `srt` is installed through a user-managed PATH such as nvm, systemd may not inherit that PATH. Use `which srt` and set `sandbox.srt_path` in `config.toml` to the absolute executable path.
+
 On WSL, this starts Terminal4GPTWeb when WSL/user systemd starts; it does not cause Windows to launch WSL at boot. On a regular Linux server, `loginctl enable-linger "$USER"` can be used when the user service must start without an interactive login.
 
 ## 7. Run the setup wizard
