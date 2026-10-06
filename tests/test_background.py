@@ -29,3 +29,14 @@ def test_cli_daemon_command_parses():
     assert args.action == "logs"
     assert args.lines == 50
     assert args.follow is True
+
+
+def test_process_is_our_daemon_fails_closed_when_cmdline_is_unreadable(monkeypatch):
+    monkeypatch.setattr(background, "process_exists", lambda _pid: True)
+
+    def unreadable(_self):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(Path, "read_bytes", unreadable)
+
+    assert background.process_is_our_daemon(12345) is False
