@@ -504,6 +504,8 @@ journalctl --user -u terminal4gptweb
 journalctl --user -u terminal4gptweb -f
 ```
 
+If sandbox mode is enabled and `srt` was installed into a user-managed PATH such as nvm, it may be visible in an interactive shell but not to the systemd user manager. In that case, run `which srt` and set `sandbox.srt_path` in `config.toml` to that absolute path.
+
 This is standard systemd behavior and works on regular Linux as well as WSL. On WSL it starts Terminal4GPTWeb **when the WSL instance/user systemd manager starts**; it does not start WSL itself at Windows boot.
 
 On a regular Linux server where the user service must run before that user logs in, enable lingering if appropriate:
