@@ -1,8 +1,6 @@
 [Unit]
 Description=Terminal4GPTWeb persistent terminal and browser bridge
 Documentation=https://github.com/hyeongmin90/terminal4gptweb
-Wants=network-online.target
-After=network-online.target
 
 [Service]
 Type=simple
