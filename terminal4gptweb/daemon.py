@@ -22,6 +22,10 @@ class TerminalRuntime:
     page: TerminalPageSettings
     session: PTYSession
     last_input_written: str = ""
+    # Last user submission already dispatched locally. Keep it until the
+    # Input block reset succeeds so a transient Notion PATCH failure cannot
+    # execute the same command twice.
+    last_submission: str = ""
     last_terminal_written: str = ""
     dirty: bool = True
     ended_reported: bool = False
@@ -265,9 +269,28 @@ class TerminalDaemon:
             print(f"[notion:{runtime.name}] input poll failed: {exc}")
             return
 
-        action, should_reset = extract_submission(text, runtime.last_input_written)
+        if runtime.last_submission and text == runtime.last_submission:
+            # The action was already dispatched, but clearing Input failed.
+            # Retry only the acknowledgement/reset, never the action itself.
+            self._reset_input(runtime)
+            return
+
+        try:
+            action, should_reset = extract_submission(text, runtime.last_input_written)
+        except Exception as exc:
+            # Malformed control syntax is user input, not a daemon-fatal error.
+            print(f"[input:{runtime.name}] {exc}")
+            runtime.last_submission = text
+            self._reset_input(runtime)
+            return
+
         if action is None:
             return
+
+        if should_reset:
+            # Mark consumed before dispatch so both dispatch failures and
+            # reset failures remain at-most-once within this daemon process.
+            runtime.last_submission = text
 
         try:
             self._dispatch(runtime, action)
@@ -641,6 +664,8 @@ class TerminalDaemon:
                 language="bash",
             )
             runtime.last_input_written = text
+            if text == self.input_prompt:
+                runtime.last_submission = ""
         except NotionError as exc:
             if exc.is_not_found:
                 self._recover_runtime_blocks(runtime)
@@ -752,6 +777,7 @@ class TerminalDaemon:
 
         runtime.last_terminal_written = terminal_text
         runtime.last_input_written = input_text
+        runtime.last_submission = ""
         runtime.dirty = False
 
         print(
