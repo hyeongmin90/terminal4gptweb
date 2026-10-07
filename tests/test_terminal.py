@@ -437,7 +437,6 @@ def test_descendant_pids_finds_grandchildren():
         parent.wait()
 
 
-
 def test_oversized_input_is_rejected_before_writing_and_noticed(tmp_path, monkeypatch):
     from terminal4gptweb import terminal as terminal_module
     from terminal4gptweb.terminal import MAX_INPUT_BYTES, InputTooLargeError, PTYSession
