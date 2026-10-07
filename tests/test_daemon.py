@@ -64,21 +64,9 @@ def test_multi_terminal_sessions_have_independent_terminal_settings(tmp_path):
 
 
 
-class _LegacyTitleNotion:
-    def __init__(self, title):
-        self.title = title
+class _PageNotion:
+    def __init__(self):
         self.updated = []
-
-    def get_page(self, page_id):
-        return {
-            "id": page_id,
-            "properties": {
-                "title": {
-                    "type": "title",
-                    "title": [{"plain_text": self.title}],
-                }
-            },
-        }
 
     def update_page_title(self, page_id, title):
         self.updated.append((page_id, title))
@@ -96,39 +84,6 @@ class _LegacyTitleNotion:
         pass
 
 
-def test_legacy_single_terminal_adopts_existing_notion_page_title(tmp_path):
-    page = TerminalPageSettings("page-1", "terminal-1", "input-1")
-    config = AppConfig(
-        notion=NotionSettings(
-            token="test",
-            page_id=page.page_id,
-            terminal_block_id=page.terminal_block_id,
-            input_block_id=page.input_block_id,
-            terminal_pages=[page],
-        ),
-        terminal=TerminalSettings(
-            cwd=str(tmp_path),
-            count=1,
-            names=["Terminal4GPTWeb"],
-            names_explicit=False,
-        ),
-    )
-
-    daemon = TerminalDaemon(config)
-    daemon.notion.close()
-    fake = _LegacyTitleNotion("My Existing Terminal")
-    daemon.notion = fake
-    try:
-        daemon._ensure_terminal_pages()
-        assert config.terminal.names == ["My Existing Terminal"]
-        assert fake.updated == [("page-1", "My Existing Terminal")]
-    finally:
-        daemon.selector.close()
-        daemon.browser.close()
-        daemon.notion.close()
-
-
-
 def test_input_poll_slot_preserves_single_terminal_interval_and_throttles_many():
     assert input_poll_slot(1, 1.2) == 1.2
     assert input_poll_slot(2, 1.2) == 0.6
@@ -137,7 +92,7 @@ def test_input_poll_slot_preserves_single_terminal_interval_and_throttles_many()
 
 
 
-def test_legacy_title_is_persisted_after_multi_terminal_page_expansion(tmp_path):
+def test_terminal_page_expansion_is_persisted_with_configured_names(tmp_path):
     page = TerminalPageSettings("page-1", "terminal-1", "input-1")
     config_path = tmp_path / "config.toml"
     config = AppConfig(
@@ -152,20 +107,19 @@ def test_legacy_title_is_persisted_after_multi_terminal_page_expansion(tmp_path)
         terminal=TerminalSettings(
             cwd=str(tmp_path),
             count=2,
-            names=["Terminal4GPTWeb 1", "Terminal4GPTWeb 2"],
-            names_explicit=False,
+            names=["Shell", "Server"],
         ),
     )
 
     daemon = TerminalDaemon(config, config_path=config_path)
     daemon.notion.close()
-    fake = _LegacyTitleNotion("My Existing Terminal")
+    fake = _PageNotion()
     daemon.notion = fake
     try:
         daemon._ensure_terminal_pages()
-        assert config.terminal.names == ["My Existing Terminal", "Terminal4GPTWeb 2"]
+        assert fake.updated == [("page-1", "Shell"), ("page-2", "Server")]
         written = config_path.read_text(encoding="utf-8")
-        assert 'names = ["My Existing Terminal", "Terminal4GPTWeb 2"]' in written
+        assert 'names = ["Shell", "Server"]' in written
         assert "[[notion.terminals]]" in written
         assert 'page_id = "page-2"' in written
     finally:

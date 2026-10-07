@@ -792,10 +792,6 @@ Example:
 [notion]
 token = "secret_xxx"
 api_version = "2026-03-11"
-page_id = "..."
-terminal_block_id = "..."
-input_block_id = "..."
-page_url = "https://..."
 parent_page_id = "..."
 help_page_id = "..."
 help_page_url = "https://..."
@@ -804,6 +800,12 @@ browser_image_block_id = "..."
 browser_vision_page_id = "..."
 browser_vision_block_id = "..."
 browser_vision_page_url = "https://..."
+
+[[notion.terminals]]
+page_id = "..."
+terminal_block_id = "..."
+input_block_id = "..."
+page_url = "https://..."
 
 [terminal]
 shell = "/bin/bash"
@@ -885,7 +887,6 @@ names = ["Shell", "Server", "Tests"]
 
 One daemon multiplexes all configured PTYs and creates named sibling control pages directly under the selected Notion parent. `count` accepts 1–16 terminals and defaults to `1`. Active page names must be unique.
 
-- Legacy single-terminal configs continue to work as `count = 1` without a manual migration step. A custom title on the existing Notion terminal page is preserved on the first upgraded start.
 - Increasing `count` creates missing terminal pages under the same parent on the next daemon start and updates the managed `[[notion.terminals]]` entries.
 - Renaming entries updates active page titles on restart.
 - Decreasing `count` does not delete old Notion pages. Only the first configured count remains active, so those pages can be reused if the count is increased later.

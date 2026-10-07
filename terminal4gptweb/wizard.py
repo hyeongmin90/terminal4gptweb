@@ -55,7 +55,6 @@ def run_init(config_path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         host=host,
         count=count,
         names=names,
-        names_explicit=True,
         input_prompt="",
         columns=columns,
         rows=rows,
@@ -83,14 +82,9 @@ def run_reinit(config_path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     print("Recreates deleted Notion pages while preserving local terminal/browser settings.\n")
 
     current = load_config(config_path)
-    parent_page_id = current.notion.parent_page_id.strip()
-    if not parent_page_id:
-        with NotionClient(current.notion.token) as notion:
-            parent_page_id = _choose_parent_page(notion)
-
     config = _create_notion_surfaces(
         token=current.notion.token,
-        parent_page_id=parent_page_id,
+        parent_page_id=current.notion.parent_page_id,
         terminal=current.terminal,
         browser=current.browser,
     )

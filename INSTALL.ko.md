@@ -681,9 +681,7 @@ t4g reinit
 t4g daemon restart
 ```
 
-저장된 `parent_page_id`가 있으면 같은 parent 아래에 새 control page를 만듭니다.
-
-오래된 config라 parent 정보가 없으면 Search Page / URL 선택 UI가 다시 표시됩니다.
+저장된 `parent_page_id`의 parent 아래에 새 control page를 만듭니다.
 
 ## 16. 보안 체크리스트
 
