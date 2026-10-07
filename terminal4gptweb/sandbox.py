@@ -20,11 +20,11 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import SandboxSettings, TerminalSettings
+from .config import CACHE_DIR, SandboxSettings, TerminalSettings
 
 
 SRT_INSTALL_HINT = "npm install -g @anthropic-ai/sandbox-runtime"
-DEFAULT_SRT_SETTINGS_PATH = Path.home() / ".cache" / "notion_is_terminal" / "srt-settings.json"
+DEFAULT_SRT_SETTINGS_PATH = CACHE_DIR / "srt-settings.json"
 
 # Host directories hidden in workspace mode. The workspace (and any
 # allow_write path) is bound back on top of them by srt.

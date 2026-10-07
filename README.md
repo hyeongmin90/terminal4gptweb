@@ -493,10 +493,12 @@ t4g daemon logs -f
 runtime 파일:
 
 ```text
-~/.cache/notion_is_terminal/daemon.pid
-~/.cache/notion_is_terminal/daemon.log
-~/.cache/notion_is_terminal/instance.lock
+~/.cache/t4g/daemon.pid
+~/.cache/t4g/daemon.log
+~/.cache/t4g/instance.lock
 ```
+
+이전 버전은 runtime 파일을 `~/.cache/notion_is_terminal/`에 두었습니다. 업그레이드 후 `t4g daemon restart`를 한 번 실행하면 이전 위치의 daemon을 찾아 종료하고 새 위치로 다시 시작합니다. 그 뒤에는 `~/.cache/notion_is_terminal/`을 삭제해도 됩니다. 이전 명령 별칭 `nit`, `notion-terminal`은 제거되었으니 `t4g`를 사용합니다.
 
 WSL 터미널 창을 닫아도 daemon은 계속 실행됩니다.
 
@@ -680,7 +682,7 @@ t4g daemon restart
 
 ```text
 sandbox.enabled = false   →  bash                                  (srt 불필요)
-sandbox.enabled = true    →  srt -s ~/.cache/notion_is_terminal/srt-settings.json \
+sandbox.enabled = true    →  srt -s ~/.cache/t4g/srt-settings.json \
                                -- script -qfec "bash --rcfile … -i" /dev/null
 ```
 

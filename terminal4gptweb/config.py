@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "t4g" / "config.toml"
+CACHE_DIR = Path.home() / ".cache" / "t4g"
 
 
 @dataclass(slots=True)

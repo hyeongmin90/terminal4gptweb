@@ -30,8 +30,6 @@ classifiers = [
 [project.scripts]
 terminal4gptweb = "terminal4gptweb.cli:main"
 t4g = "terminal4gptweb.cli:main"
-notion-terminal = "terminal4gptweb.cli:main"
-nit = "terminal4gptweb.cli:main"
 
 [project.urls]
 Repository = "https://github.com/hyeongmin90/terminal4gptweb"

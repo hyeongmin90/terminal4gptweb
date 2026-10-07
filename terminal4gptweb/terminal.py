@@ -15,7 +15,7 @@ from urllib.parse import unquote
 
 import pyte
 
-from .config import TerminalSettings
+from .config import CACHE_DIR, TerminalSettings
 from .sandbox import build_shell_launch, descendant_pids, process_name
 
 
@@ -278,9 +278,8 @@ class PTYSession:
             self._osc_buffer = self._osc_buffer[-1024:]
 
     def _write_bash_rcfile(self) -> Path:
-        cache_dir = Path.home() / ".cache" / "notion_is_terminal"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        rcfile = cache_dir / "bashrc"
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        rcfile = CACHE_DIR / "bashrc"
 
         lines: list[str] = []
         if self.settings.source_bashrc:
@@ -292,13 +291,13 @@ class PTYSession:
 
         prompt = f"{self.settings.user}@{self.settings.host}:\\w\\$ "
         lines.extend([
-            "__nit_emit_cwd() {",
+            "__t4g_emit_cwd() {",
             "  printf '\\033]7;file://localhost%s\\007' \"$PWD\"",
             "}",
             'if [ -n "${PROMPT_COMMAND-}" ]; then',
-            '  PROMPT_COMMAND="__nit_emit_cwd;${PROMPT_COMMAND}"',
+            '  PROMPT_COMMAND="__t4g_emit_cwd;${PROMPT_COMMAND}"',
             "else",
-            '  PROMPT_COMMAND="__nit_emit_cwd"',
+            '  PROMPT_COMMAND="__t4g_emit_cwd"',
             "fi",
             f"PS1={shlex.quote(prompt)}",
             "export PS1 PROMPT_COMMAND",

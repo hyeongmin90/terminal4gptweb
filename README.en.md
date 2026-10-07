@@ -487,10 +487,12 @@ t4g daemon logs -f
 Runtime files:
 
 ```text
-~/.cache/notion_is_terminal/daemon.pid
-~/.cache/notion_is_terminal/daemon.log
-~/.cache/notion_is_terminal/instance.lock
+~/.cache/t4g/daemon.pid
+~/.cache/t4g/daemon.log
+~/.cache/t4g/instance.lock
 ```
+
+Earlier releases kept runtime files in `~/.cache/notion_is_terminal/`. After upgrading, run `t4g daemon restart` once: it finds and stops a daemon recorded at the old location and starts it again under the new one. You can then delete `~/.cache/notion_is_terminal/`. The old command aliases `nit` and `notion-terminal` were removed; use `t4g`.
 
 The detached daemon survives closing the WSL terminal window.
 
@@ -674,7 +676,7 @@ By default the shell runs with the full permissions of the user running the daem
 
 ```text
 sandbox.enabled = false   →  bash                                  (srt not needed)
-sandbox.enabled = true    →  srt -s ~/.cache/notion_is_terminal/srt-settings.json \
+sandbox.enabled = true    →  srt -s ~/.cache/t4g/srt-settings.json \
                                -- script -qfec "bash --rcfile … -i" /dev/null
 ```
 

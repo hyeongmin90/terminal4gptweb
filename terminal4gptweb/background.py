@@ -9,46 +9,63 @@ import time
 from pathlib import Path
 from typing import TextIO
 
-from .config import DEFAULT_CONFIG_PATH, load_config
+from .config import CACHE_DIR, DEFAULT_CONFIG_PATH, load_config
 
 
-CACHE_DIR = Path.home() / ".cache" / "notion_is_terminal"
 PID_FILE = CACHE_DIR / "daemon.pid"
 LOG_FILE = CACHE_DIR / "daemon.log"
 LOCK_FILE = CACHE_DIR / "instance.lock"
 
+# Releases before the rename kept runtime state under the old project name.
+# A daemon started by one of them still holds this lock and PID file, so honour
+# both: otherwise an upgrade could start a second daemon on the same pages and
+# `t4g daemon stop` could not find the old one.
+LEGACY_CACHE_DIR = Path.home() / ".cache" / "notion_is_terminal"
+LEGACY_PID_FILE = LEGACY_CACHE_DIR / "daemon.pid"
+LEGACY_LOCK_FILE = LEGACY_CACHE_DIR / "instance.lock"
+
 
 class InstanceLock:
     def __init__(self) -> None:
-        self._stream: TextIO | None = None
+        self._streams: list[TextIO] = []
 
     def __enter__(self) -> "InstanceLock":
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        stream = LOCK_FILE.open("a+", encoding="utf-8")
-        try:
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            stream.close()
-            raise RuntimeError(
-                "another Terminal4GPTWeb session is already running "
-                "(foreground or daemon)"
-            )
-
+        stream = _acquire_lock(LOCK_FILE)
         stream.seek(0)
         stream.truncate()
         stream.write(str(os.getpid()))
         stream.flush()
-        self._stream = stream
+        self._streams.append(stream)
+
+        if LEGACY_LOCK_FILE.exists():
+            try:
+                self._streams.append(_acquire_lock(LEGACY_LOCK_FILE))
+            except RuntimeError:
+                self.__exit__()
+                raise
         return self
 
     def __exit__(self, *exc_info: object) -> None:
-        if self._stream is None:
-            return
-        try:
-            fcntl.flock(self._stream.fileno(), fcntl.LOCK_UN)
-        finally:
-            self._stream.close()
-            self._stream = None
+        while self._streams:
+            stream = self._streams.pop()
+            try:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+            finally:
+                stream.close()
+
+
+def _acquire_lock(path: Path) -> TextIO:
+    stream = path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        stream.close()
+        raise RuntimeError(
+            "another Terminal4GPTWeb session is already running "
+            "(foreground or daemon)"
+        )
+    return stream
 
 
 def start_daemon(config_path: Path | str = DEFAULT_CONFIG_PATH) -> int:
@@ -66,7 +83,7 @@ def start_daemon(config_path: Path | str = DEFAULT_CONFIG_PATH) -> int:
     log = LOG_FILE.open("ab", buffering=0)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    env["NIT_DAEMON_MODE"] = "1"
+    env["T4G_DAEMON_MODE"] = "1"
 
     process = subprocess.Popen(
         [
@@ -194,11 +211,12 @@ def show_logs(*, lines: int = 100, follow: bool = False) -> int:
 
 
 def read_pid() -> int | None:
-    try:
-        value = PID_FILE.read_text(encoding="utf-8").strip()
-        return int(value)
-    except (FileNotFoundError, ValueError, OSError):
-        return None
+    for path in (PID_FILE, LEGACY_PID_FILE):
+        try:
+            return int(path.read_text(encoding="utf-8").strip())
+        except (FileNotFoundError, ValueError, OSError):
+            continue
+    return None
 
 
 def process_exists(pid: int) -> bool:
@@ -223,6 +241,8 @@ def process_is_our_daemon(pid: int) -> bool:
         # cannot prove ownership, fail closed and never signal that PID.
         return False
 
+    # notion_is_terminal is the module name of daemons started before the
+    # package rename; they may still be running after an in-place upgrade.
     return (
         (" terminal4gptweb " in f" {cmdline} " or " notion_is_terminal " in f" {cmdline} ")
         and " run " in f" {cmdline} "
@@ -230,10 +250,11 @@ def process_is_our_daemon(pid: int) -> bool:
 
 
 def _remove_pid_file() -> None:
-    try:
-        PID_FILE.unlink()
-    except FileNotFoundError:
-        pass
+    for path in (PID_FILE, LEGACY_PID_FILE):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _tail_lines(path: Path, count: int) -> list[str]:

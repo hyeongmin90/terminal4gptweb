@@ -367,7 +367,7 @@ Notion page title
 runtime:
 
 ```text
-~/.cache/notion_is_terminal/
+~/.cache/t4g/
 ├─ daemon.pid
 ├─ daemon.log
 ├─ instance.lock
@@ -390,7 +390,7 @@ Parent Page
 
 ## 9. Sandbox 설정 (srt)
 
-`enabled`가 전체 스위치입니다. 켜면 셸이 [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime) 안에서 실행되고, t4g가 `[sandbox]` 설정으로 `~/.cache/notion_is_terminal/srt-settings.json`을 만들어 srt에 넘깁니다.
+`enabled`가 전체 스위치입니다. 켜면 셸이 [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime) 안에서 실행되고, t4g가 `[sandbox]` 설정으로 `~/.cache/t4g/srt-settings.json`을 만들어 srt에 넘깁니다.
 
 예:
 
