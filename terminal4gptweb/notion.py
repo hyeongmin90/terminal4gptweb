@@ -1107,6 +1107,10 @@ def help_page_children() -> list[dict[str, Any]]:
             "Input submission rule: text is executed only when the actual Input content ends with a newline. In the Notion UI, press Enter once after the action. Through an API/connector, preserve a trailing \\n; for Markdown-style code-block edits, leave one blank line after the action before the closing code fence. If the command stays visible in Input instead of resetting, check this first.",
             "↩️",
         ),
+        bulleted_payload(
+            "Input size limit: one submission may be at most 4000 bytes (UTF-8). Larger input is not sent and the Terminal shows "
+            "[Terminal4GPTWeb] Input not sent: ...; split long content into several cat >> file <<'EOF' submissions."
+        ),
         paragraph_payload(
             "Treat the parent page as a tool surface. Read Terminal before acting. Write exactly one command or control action to Input, "
             "wait for Input to reset, then read Terminal or Browser Status again before the next action."

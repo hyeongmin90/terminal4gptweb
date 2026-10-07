@@ -13,6 +13,7 @@ Notion 연결에서 "Terminal4GPTWeb" 제어 페이지를 찾고, 작업을 시�
 - Terminal 또는 Browser Status를 먼저 관찰한 뒤 행동해.
 - Notion의 Input에는 한 번에 하나의 action만 작성해.
 - **Input은 실제 text가 newline으로 끝나야 실행돼.** 명령 문자열만 써 놓고 마지막 줄바꿈이 없으면 실행되지 않아. Notion connector/API로 수정할 때 trailing newline이 남도록 하고, Markdown 코드블록 방식이면 명령 뒤 빈 줄 하나를 둔 뒤 코드블록을 닫아. 명령이 Input에 그대로 남아 있으면 이 newline 누락부터 확인해.
+- 한 번의 제출은 최대 4000 bytes(UTF-8, 한글은 글자당 3 bytes)야. 넘으면 전송되지 않고 Terminal에 `[Terminal4GPTWeb] Input not sent: ...`가 표시돼. 파일처럼 긴 내용은 `cat >> file <<'EOF'`로 여러 번 나눠 제출해.
 - Input을 작성한 뒤 Input이 다시 초기화되고 결과가 갱신될 때까지 기다린 다음 다음 action을 수행해.
 - 일반 문자열과 제어 명령을 한 번에 섞지 마. 예를 들어 Codex/Claude Code 같은 TUI에 문자열을 입력한 뒤 실제 Enter가 필요하면 문자열을 먼저 제출하고, 다음 Input action으로 ":k ENTER"만 별도로 제출해.
 - ":k", ":c", ":s", ":rs", ":b" 같은 Terminal4GPTWeb 제어 명령은 해당 프로그램의 채팅/입력창에 타이핑하는 문자열이 아니라 Notion Input에서 해석되는 별도 control action이야.

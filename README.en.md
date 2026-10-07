@@ -861,7 +861,7 @@ vision_quality = 35
 vision_max_base64_chars = 160000
 ```
 
-`NOTION_TOKEN` overrides the token stored in the config.
+The Notion token is read only from `notion.token` in the config.
 
 The `[sandbox]` keys are explained in [PTY sandbox (srt)](#pty-sandbox-srt).
 

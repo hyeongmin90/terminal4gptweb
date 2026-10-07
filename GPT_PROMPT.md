@@ -13,6 +13,7 @@ Operating rules:
 - Observe Terminal or Browser Status before acting.
 - Write exactly one action at a time to the Notion Input block.
 - **Input runs only when the actual text ends with a newline.** Writing the command text without the final line break does not submit it. Preserve a trailing newline when using a Notion connector/API; for Markdown code-block edits, leave one blank line after the action before closing the code block. If a command remains visible in Input, check this first.
+- One submission may be at most 4000 bytes (UTF-8). Larger input is not sent, and the Terminal shows `[Terminal4GPTWeb] Input not sent: ...`; split long content (e.g. files) into several `cat >> file <<'EOF'` submissions.
 - After writing Input, wait for Input to reset and for the result to update before sending the next action.
 - Do not combine ordinary text and control commands in one submission. For example, if text has been entered into a Codex/Claude Code TUI and a real Enter key is needed, submit the text first, then send a separate Input action containing only ":k ENTER".
 - Terminal4GPTWeb control syntax such as ":k", ":c", ":s", ":rs", and ":b" is interpreted by the Notion Input protocol. Do not type those strings into the application/TUI chat field itself.

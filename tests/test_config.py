@@ -495,3 +495,24 @@ names = ["Work", "work"]
 
     with pytest.raises(ValueError, match="unique"):
         load_config(path)
+
+
+def test_notion_token_env_var_is_ignored(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("NOTION_TOKEN", "secret_from_env")
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[notion]\npage_id = "p"\nterminal_block_id = "t"\ninput_block_id = "i"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="notion.token"):
+        load_config(path)
+
+    path.write_text(
+        '[notion]\ntoken = "secret_from_file"\npage_id = "p"\n'
+        'terminal_block_id = "t"\ninput_block_id = "i"\n',
+        encoding="utf-8",
+    )
+    config = load_config(path)
+    assert config.notion.token == "secret_from_file"
+    write_config(config, path)
+    assert "secret_from_env" not in path.read_text(encoding="utf-8")

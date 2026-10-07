@@ -867,7 +867,7 @@ vision_quality = 35
 vision_max_base64_chars = 160000
 ```
 
-환경변수 `NOTION_TOKEN`이 있으면 config의 token보다 우선합니다.
+Notion token은 config의 `notion.token`에서만 읽습니다.
 
 ### 다중 터미널
 
