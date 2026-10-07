@@ -492,8 +492,6 @@ Runtime files:
 ~/.cache/t4g/instance.lock
 ```
 
-Earlier releases kept runtime files in `~/.cache/notion_is_terminal/`. After upgrading, run `t4g daemon restart` once: it finds and stops a daemon recorded at the old location and starts it again under the new one. You can then delete `~/.cache/notion_is_terminal/`. The old command aliases `nit` and `notion-terminal` were removed; use `t4g`.
-
 The detached daemon survives closing the WSL terminal window.
 
 ### Auto-start with a systemd user service

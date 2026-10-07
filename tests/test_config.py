@@ -18,7 +18,6 @@ from terminal4gptweb.config import (
 
 def test_default_config_path_uses_t4g_directory():
     assert DEFAULT_CONFIG_PATH == Path.home() / ".config" / "t4g" / "config.toml"
-    assert "notion_is_terminal" not in str(DEFAULT_CONFIG_PATH)
 
 
 def test_config_round_trip(tmp_path: Path):
