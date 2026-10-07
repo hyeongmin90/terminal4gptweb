@@ -63,6 +63,18 @@ pwd
 
 위 표현은 Input 코드블록의 실제 내용이 newline으로 끝나도록 하기 위한 것입니다.
 
+### 입력 크기 제한
+
+일반 shell input과 `:send`는 한 번에 **최대 4000 bytes**(UTF-8 기준, 끝의 Enter 포함)까지 보낼 수 있습니다. 한글은 글자당 3 bytes입니다. 제한은 커널 tty 입력 버퍼(4096 bytes)에 맞춘 값입니다.
+
+초과하면 PTY에 아무것도 보내지 않고 Input을 비운 뒤, Terminal 블록에 다음과 같은 메시지를 표시합니다.
+
+```text
+[Terminal4GPTWeb] Input not sent: 5123 bytes exceeds the 4000-byte limit (UTF-8). Split it into smaller submissions.
+```
+
+긴 파일은 `cat >> file <<'EOF'` 같은 명령을 여러 번 나눠 제출해 작성합니다.
+
 ### 한 번에 하나의 action
 
 한 Input 제출에는 하나의 shell command 또는 하나의 control action만 넣는 것을 권장합니다.

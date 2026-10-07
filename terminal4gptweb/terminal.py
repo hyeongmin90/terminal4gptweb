@@ -19,6 +19,11 @@ from .config import TerminalSettings
 from .sandbox import build_shell_launch, descendant_pids, process_name
 
 
+# The kernel tty input queue holds 4096 bytes. A larger write to the
+# non-blocking PTY master fails part-way and leaves a truncated line queued
+# in front of the next command, so reject oversized input before writing.
+MAX_INPUT_BYTES = 4000
+
 OSC7_RE = re.compile(r"\x1b]7;file://[^/]*(/[^\x07\x1b]*)\x07")
 
 KEYS: dict[str, bytes] = {
@@ -50,6 +55,10 @@ KEYS: dict[str, bytes] = {
     "F11": b"\x1b[23~",
     "F12": b"\x1b[24~",
 }
+
+
+class InputTooLargeError(ValueError):
+    pass
 
 
 class PTYSession:
@@ -148,6 +157,11 @@ class PTYSession:
         self.send_text(normalized.replace("\n", "\r") + "\r")
 
     def send_bytes(self, data: bytes) -> None:
+        if len(data) > MAX_INPUT_BYTES:
+            raise InputTooLargeError(
+                f"Input not sent: {len(data)} bytes exceeds the {MAX_INPUT_BYTES}-byte "
+                "limit (UTF-8). Split it into smaller submissions."
+            )
         if not self.is_alive() or self.master_fd is None:
             raise RuntimeError("Shell session is not running")
         view = memoryview(data)
@@ -182,6 +196,10 @@ class PTYSession:
         if data is None:
             raise ValueError(f"Unsupported key: {key}")
         self.send_bytes(data)
+
+    def show_notice(self, text: str) -> None:
+        """Print a daemon message on the rendered screen without involving the shell."""
+        self.stream.feed("\r\n" + text.replace("\n", "\r\n") + "\r\n")
 
     def resize(self, columns: int, rows: int) -> None:
         if not (20 <= columns <= 400 and 5 <= rows <= 200):

@@ -148,9 +148,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     sandbox_raw = raw.get("sandbox", {})
     browser_raw = raw.get("browser", {})
 
-    token = os.environ.get("NOTION_TOKEN") or notion_raw.get("token", "")
+    token = str(notion_raw.get("token", "")).strip()
     if not token:
-        raise ValueError("Notion token is missing from config and NOTION_TOKEN is not set.")
+        raise ValueError("Notion token is missing from config: set notion.token.")
 
     count = int(terminal_raw.get("count", 1))
     names = _terminal_names(count, terminal_raw.get("names", []))

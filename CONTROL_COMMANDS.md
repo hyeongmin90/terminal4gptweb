@@ -60,6 +60,18 @@ pwd
 ```
 ```
 
+### Input size limit
+
+Normal shell input and `:send` accept at most **4000 bytes** per submission (UTF-8, including the final Enter). The limit fits the kernel tty input buffer (4096 bytes).
+
+Oversized input is not sent to the PTY at all. Input is reset and the Terminal block shows:
+
+```text
+[Terminal4GPTWeb] Input not sent: 5123 bytes exceeds the 4000-byte limit (UTF-8). Split it into smaller submissions.
+```
+
+Write long files in several submissions, e.g. repeated `cat >> file <<'EOF'` chunks.
+
 Use one action per submission:
 
 ```text

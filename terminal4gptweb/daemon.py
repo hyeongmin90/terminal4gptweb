@@ -12,7 +12,7 @@ from .config import AppConfig, DEFAULT_CONFIG_PATH, TerminalPageSettings, write_
 from .notion import NotionClient, NotionError, page_title
 from .protocol import InputAction, InputKind, extract_submission
 from .sandbox import SandboxUnavailableError
-from .terminal import PTYSession
+from .terminal import InputTooLargeError, PTYSession
 
 
 @dataclass(slots=True)
@@ -294,6 +294,10 @@ class TerminalDaemon:
 
         try:
             self._dispatch(runtime, action)
+        except InputTooLargeError as exc:
+            print(f"[input:{runtime.name}] {exc}")
+            runtime.session.show_notice(f"[Terminal4GPTWeb] {exc}")
+            runtime.dirty = True
         except Exception as exc:
             print(f"[input:{runtime.name}] {exc}")
             runtime.dirty = True

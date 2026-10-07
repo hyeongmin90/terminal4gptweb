@@ -435,3 +435,27 @@ def test_descendant_pids_finds_grandchildren():
     finally:
         os.killpg(parent.pid, signal.SIGKILL)
         parent.wait()
+
+
+def test_oversized_input_is_rejected_before_writing_and_noticed(tmp_path, monkeypatch):
+    from terminal4gptweb import terminal as terminal_module
+    from terminal4gptweb.terminal import MAX_INPUT_BYTES, InputTooLargeError, PTYSession
+
+    session = PTYSession(TerminalSettings(cwd=str(tmp_path)))
+    session.master_fd = -1
+    monkeypatch.setattr(session, "is_alive", lambda: True)
+    sent: list[bytes] = []
+    monkeypatch.setattr(
+        terminal_module.os, "write", lambda _fd, data: sent.append(bytes(data)) or len(data)
+    )
+
+    with pytest.raises(InputTooLargeError):
+        session.send_line("가" * (MAX_INPUT_BYTES // 3 + 1))
+    assert sent == []
+
+    session.send_line("x" * (MAX_INPUT_BYTES - 1))
+    assert sent == [b"x" * (MAX_INPUT_BYTES - 1) + b"\r"]
+    session.master_fd = None
+
+    session.show_notice("[Terminal4GPTWeb] Input not sent")
+    assert "[Terminal4GPTWeb] Input not sent" in session.render()

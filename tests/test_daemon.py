@@ -258,3 +258,33 @@ def test_malformed_input_is_reset_without_crashing_daemon(tmp_path):
         daemon.selector.close()
         daemon.browser.close()
         daemon.notion.close()
+
+
+class _OversizedInputSession(_InputSession):
+    def __init__(self):
+        super().__init__()
+        self.notices = []
+
+    def send_line(self, value):
+        from terminal4gptweb.terminal import InputTooLargeError
+
+        raise InputTooLargeError("Input not sent: too large")
+
+    def show_notice(self, text):
+        self.notices.append(text)
+
+
+def test_oversized_input_shows_notice_on_terminal_and_resets_input(tmp_path):
+    daemon, runtime = _input_runtime(tmp_path, "echo big\n")
+    runtime.session = _OversizedInputSession()
+    fake = _InputNotion("echo big\n")
+    daemon.notion = fake
+    try:
+        daemon._poll_input(runtime)
+        assert runtime.session.notices == ["[Terminal4GPTWeb] Input not sent: too large"]
+        assert runtime.dirty
+        assert fake.text == ""
+    finally:
+        daemon.selector.close()
+        daemon.browser.close()
+        daemon.notion.close()
