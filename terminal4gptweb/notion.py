@@ -317,7 +317,7 @@ class NotionClient:
                 recreated=repaired,
             )
 
-        # Legacy/fallback path if a user also deleted or substantially changed
+        # Fallback path if a user also deleted or substantially changed
         # the stable headings/description blocks. With no anchors, we cannot
         # reliably restore only one side to its original position.
         for block_id, block in (
@@ -706,7 +706,7 @@ class NotionClient:
             if old is not None and not old.get("archived") and not old.get("in_trash"):
                 self.archive_block(old_image_block_id)
 
-        # Also clean up stale image blocks left by an interrupted/older daemon.
+        # Also clean up stale image blocks left by an interrupted daemon.
         for stale_id in browser_screenshot_image_ids(
             children,
             anchor_id=anchors.screenshot_anchor_id,
@@ -1098,7 +1098,7 @@ def help_page_children() -> list[dict[str, Any]]:
             "terminal.count controls how many independent persistent PTYs the daemon multiplexes. "
             "terminal.names assigns the sibling Notion page name for each PTY. Each terminal keeps its own cwd, REPL/TUI state, input, and output."
         ),
-        bulleted_payload("Default: count = 1 with the legacy Terminal4GPTWeb page name."),
+        bulleted_payload("Default: count = 1 with the Terminal4GPTWeb page name."),
         bulleted_payload("Increasing count creates missing sibling terminal pages under the configured parent on daemon restart."),
         bulleted_payload("Decreasing count does not delete existing Notion pages; only the first configured count stays active."),
         bulleted_payload("Playwright Browser / Vision and :b commands are available on the first configured terminal page only."),

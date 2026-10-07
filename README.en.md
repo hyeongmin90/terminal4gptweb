@@ -487,9 +487,9 @@ t4g daemon logs -f
 Runtime files:
 
 ```text
-~/.cache/notion_is_terminal/daemon.pid
-~/.cache/notion_is_terminal/daemon.log
-~/.cache/notion_is_terminal/instance.lock
+~/.cache/t4g/daemon.pid
+~/.cache/t4g/daemon.log
+~/.cache/t4g/instance.lock
 ```
 
 The detached daemon survives closing the WSL terminal window.
@@ -674,7 +674,7 @@ By default the shell runs with the full permissions of the user running the daem
 
 ```text
 sandbox.enabled = false   →  bash                                  (srt not needed)
-sandbox.enabled = true    →  srt -s ~/.cache/notion_is_terminal/srt-settings.json \
+sandbox.enabled = true    →  srt -s ~/.cache/t4g/srt-settings.json \
                                -- script -qfec "bash --rcfile … -i" /dev/null
 ```
 
@@ -792,10 +792,6 @@ Example:
 [notion]
 token = "secret_xxx"
 api_version = "2026-03-11"
-page_id = "..."
-terminal_block_id = "..."
-input_block_id = "..."
-page_url = "https://..."
 parent_page_id = "..."
 help_page_id = "..."
 help_page_url = "https://..."
@@ -804,6 +800,12 @@ browser_image_block_id = "..."
 browser_vision_page_id = "..."
 browser_vision_block_id = "..."
 browser_vision_page_url = "https://..."
+
+[[notion.terminals]]
+page_id = "..."
+terminal_block_id = "..."
+input_block_id = "..."
+page_url = "https://..."
 
 [terminal]
 shell = "/bin/bash"
@@ -885,7 +887,6 @@ names = ["Shell", "Server", "Tests"]
 
 One daemon multiplexes all configured PTYs and creates named sibling control pages directly under the selected Notion parent. `count` accepts 1–16 terminals and defaults to `1`. Active page names must be unique.
 
-- Legacy single-terminal configs continue to work as `count = 1` without a manual migration step. A custom title on the existing Notion terminal page is preserved on the first upgraded start.
 - Increasing `count` creates missing terminal pages under the same parent on the next daemon start and updates the managed `[[notion.terminals]]` entries.
 - Renaming entries updates active page titles on restart.
 - Decreasing `count` does not delete old Notion pages. Only the first configured count remains active, so those pages can be reused if the count is increased later.

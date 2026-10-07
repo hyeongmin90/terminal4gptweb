@@ -40,3 +40,4 @@ def test_process_is_our_daemon_fails_closed_when_cmdline_is_unreadable(monkeypat
     monkeypatch.setattr(Path, "read_bytes", unreadable)
 
     assert background.process_is_our_daemon(12345) is False
+

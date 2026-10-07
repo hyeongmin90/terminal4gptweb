@@ -18,7 +18,6 @@ from terminal4gptweb.config import (
 
 def test_default_config_path_uses_t4g_directory():
     assert DEFAULT_CONFIG_PATH == Path.home() / ".config" / "t4g" / "config.toml"
-    assert "notion_is_terminal" not in str(DEFAULT_CONFIG_PATH)
 
 
 def test_config_round_trip(tmp_path: Path):
@@ -104,7 +103,6 @@ def test_config_round_trip(tmp_path: Path):
     assert loaded.notion.terminal_pages[1].page_id == "page-2"
     assert loaded.terminal.count == 2
     assert loaded.terminal.names == ["Local", "Server"]
-    assert loaded.terminal.names_explicit is True
     assert loaded.terminal.input_prompt == ""
     assert loaded.terminal.columns == 100
     assert loaded.terminal.rows == 30
@@ -144,12 +142,15 @@ def test_config_round_trip(tmp_path: Path):
     assert loaded.browser.height == 720
 
 
-def test_old_config_defaults_to_promptless_input_and_more_rows(tmp_path: Path):
+def test_minimal_config_uses_defaults(tmp_path: Path):
     path = tmp_path / "config.toml"
     path.write_text(
         """
 [notion]
 token = "secret_test"
+parent_page_id = "parent"
+
+[[notion.terminals]]
 page_id = "page"
 terminal_block_id = "terminal"
 input_block_id = "input"
@@ -165,7 +166,6 @@ cwd = "/tmp"
     assert loaded.terminal.input_prompt == ""
     assert loaded.terminal.count == 1
     assert loaded.terminal.names == ["Terminal4GPTWeb"]
-    assert loaded.terminal.names_explicit is False
     assert len(loaded.notion.terminal_pages) == 1
     assert loaded.notion.terminal_pages[0].page_id == "page"
     assert loaded.terminal.rows == 60
@@ -181,33 +181,16 @@ cwd = "/tmp"
     assert loaded.terminal.sandbox.credential_env == []
 
 
-def test_legacy_default_input_prompt_is_migrated(tmp_path: Path):
+
+def test_minimal_config_gets_browser_defaults(tmp_path: Path):
     path = tmp_path / "config.toml"
     path.write_text(
         """
 [notion]
 token = "secret_test"
-page_id = "page"
-terminal_block_id = "terminal"
-input_block_id = "input"
+parent_page_id = "parent"
 
-[terminal]
-input_prompt = "> "
-""".strip(),
-        encoding="utf-8",
-    )
-
-    loaded = load_config(path)
-    assert loaded.terminal.input_prompt == ""
-    assert loaded.terminal.rows == 60
-
-
-def test_old_config_gets_browser_defaults(tmp_path: Path):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        """
-[notion]
-token = "secret_test"
+[[notion.terminals]]
 page_id = "page"
 terminal_block_id = "terminal"
 input_block_id = "input"
@@ -220,7 +203,7 @@ cwd = "/tmp"
     )
 
     loaded = load_config(path)
-    assert loaded.notion.parent_page_id == ""
+    assert loaded.notion.parent_page_id == "parent"
     assert loaded.notion.help_page_id == ""
     assert loaded.notion.help_page_url == ""
     assert loaded.notion.browser_status_block_id == ""
@@ -237,6 +220,9 @@ cwd = "/tmp"
 HEADER = """
 [notion]
 token = "secret_test"
+parent_page_id = "parent"
+
+[[notion.terminals]]
 page_id = "page"
 terminal_block_id = "terminal"
 input_block_id = "input"
@@ -293,63 +279,9 @@ workspace_path = "/tmp/project"
     assert sandbox.mode == "workspace_read_only"
 
 
-@pytest.mark.parametrize(
-    "legacy",
-    [
-        "read_only = true",
-        "workspace = true",
-        "masking = true",
-        'deny_read = ["secrets"]',
-        'deny_write = [".git"]',
-    ],
-)
-def test_pre_enabled_configs_with_restrictions_stay_sandboxed(tmp_path: Path, legacy: str):
-    sandbox = _load(tmp_path, "[sandbox]\n" + legacy)
-    assert sandbox.enabled is True
 
 
-def test_pre_enabled_config_without_restrictions_stays_unsandboxed(tmp_path: Path):
-    sandbox = _load(tmp_path, """
-[sandbox]
-read_only = false
-workspace = false
-masking = false
-""")
-    assert sandbox.enabled is False
 
-
-def test_legacy_workspace_path_string_migrates(tmp_path: Path):
-    sandbox = _load(tmp_path, """
-[sandbox]
-enabled = true
-workspace_enabled = true
-workspace = "/tmp/project"
-""")
-    assert sandbox.workspace is True
-    assert sandbox.workspace_path == "/tmp/project"
-    assert sandbox.read_only is False
-
-
-def test_legacy_mode_workspace_maps_to_explicit_flags(tmp_path: Path):
-    sandbox = _load(tmp_path, """
-[sandbox]
-mode = "workspace"
-workspace = "/tmp/project"
-""")
-    assert sandbox.enabled is True
-    assert sandbox.workspace is True
-    assert sandbox.workspace_path == "/tmp/project"
-    assert sandbox.mode == "workspace"
-
-
-def test_legacy_read_only_mode_maps_to_explicit_flags(tmp_path: Path):
-    sandbox = _load(tmp_path, """
-[sandbox]
-mode = "read_only"
-""")
-    assert sandbox.enabled is True
-    assert sandbox.read_only is True
-    assert sandbox.mode == "read_only"
 
 
 def test_credential_extract_requires_one_capture_group(tmp_path: Path):
@@ -453,10 +385,12 @@ def test_multi_terminal_defaults_generate_distinct_names(tmp_path: Path):
         """
 [notion]
 token = "secret_test"
+parent_page_id = "parent"
+
+[[notion.terminals]]
 page_id = "page"
 terminal_block_id = "terminal"
 input_block_id = "input"
-parent_page_id = "parent"
 
 [terminal]
 count = 3
@@ -482,6 +416,9 @@ def test_multi_terminal_names_must_be_unique(tmp_path: Path):
         """
 [notion]
 token = "secret_test"
+parent_page_id = "parent"
+
+[[notion.terminals]]
 page_id = "page"
 terminal_block_id = "terminal"
 input_block_id = "input"
@@ -500,19 +437,45 @@ names = ["Work", "work"]
 def test_notion_token_env_var_is_ignored(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("NOTION_TOKEN", "secret_from_env")
     path = tmp_path / "config.toml"
-    path.write_text(
-        '[notion]\npage_id = "p"\nterminal_block_id = "t"\ninput_block_id = "i"\n',
-        encoding="utf-8",
-    )
+    path.write_text(HEADER.replace('token = "secret_test"\n', ""), encoding="utf-8")
     with pytest.raises(ValueError, match="notion.token"):
         load_config(path)
 
-    path.write_text(
-        '[notion]\ntoken = "secret_from_file"\npage_id = "p"\n'
-        'terminal_block_id = "t"\ninput_block_id = "i"\n',
-        encoding="utf-8",
-    )
+    path.write_text(HEADER.replace("secret_test", "secret_from_file"), encoding="utf-8")
     config = load_config(path)
     assert config.notion.token == "secret_from_file"
     write_config(config, path)
     assert "secret_from_env" not in path.read_text(encoding="utf-8")
+
+
+def test_sandbox_stays_disabled_unless_enabled(tmp_path: Path):
+    sandbox = _load(tmp_path, """
+[sandbox]
+read_only = true
+deny_write = [".git"]
+""")
+    assert sandbox.enabled is False
+
+
+def test_sandbox_workspace_must_be_boolean(tmp_path: Path):
+    with pytest.raises(ValueError, match="sandbox.workspace must be true or false"):
+        _load(tmp_path, """
+[sandbox]
+enabled = true
+workspace = "/tmp/project"
+""")
+
+
+@pytest.mark.parametrize(
+    ("removed", "message"),
+    [
+        ('parent_page_id = "parent"\n', "parent_page_id"),
+        ('\n[[notion.terminals]]\npage_id = "page"\nterminal_block_id = "terminal"\ninput_block_id = "input"\n', "notion.terminals"),
+    ],
+)
+def test_required_notion_entries(tmp_path: Path, removed: str, message: str):
+    path = tmp_path / "config.toml"
+    assert removed in HEADER
+    path.write_text(HEADER.replace(removed, ""), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        load_config(path)

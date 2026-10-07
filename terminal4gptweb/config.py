@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "t4g" / "config.toml"
+CACHE_DIR = Path.home() / ".cache" / "t4g"
 
 
 @dataclass(slots=True)
@@ -106,7 +107,6 @@ class TerminalSettings:
     host: str = "ubuntu"
     count: int = 1
     names: list[str] = field(default_factory=lambda: ["Terminal4GPTWeb"])
-    names_explicit: bool = False
     input_prompt: str = ""
     columns: int = 120
     rows: int = 60
@@ -175,16 +175,11 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 )
             )
 
-    if terminal_pages:
-        primary = terminal_pages[0]
-    else:
-        primary = TerminalPageSettings(
-            page_id=_required(notion_raw, "page_id"),
-            terminal_block_id=_required(notion_raw, "terminal_block_id"),
-            input_block_id=_required(notion_raw, "input_block_id"),
-            page_url=str(notion_raw.get("page_url", "")),
+    if not terminal_pages:
+        raise ValueError(
+            "Missing [[notion.terminals]] entries in config. Run `t4g init` to create them."
         )
-        terminal_pages.append(primary)
+    primary = terminal_pages[0]
 
     notion = NotionSettings(
         token=token,
@@ -192,7 +187,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         terminal_block_id=primary.terminal_block_id,
         input_block_id=primary.input_block_id,
         page_url=primary.page_url,
-        parent_page_id=str(notion_raw.get("parent_page_id", "")),
+        parent_page_id=_required(notion_raw, "parent_page_id"),
         help_page_id=str(notion_raw.get("help_page_id", "")),
         help_page_url=str(notion_raw.get("help_page_url", "")),
         api_version=notion_raw.get("api_version", "2026-03-11"),
@@ -206,14 +201,6 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
 
     sandbox = _load_sandbox(sandbox_raw)
 
-    input_prompt = str(terminal_raw.get("input_prompt", ""))
-    rows = int(terminal_raw.get("rows", 60))
-    if input_prompt == "> ":
-        # Migrate the previous default UI settings together.
-        input_prompt = ""
-        if rows == 40:
-            rows = 60
-
     terminal = TerminalSettings(
         shell=terminal_raw.get("shell", "/bin/bash"),
         cwd=terminal_raw.get("cwd", str(Path.home())),
@@ -221,10 +208,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         host=terminal_raw.get("host", "ubuntu"),
         count=count,
         names=names,
-        names_explicit="names" in terminal_raw,
-        input_prompt=input_prompt,
+        input_prompt=str(terminal_raw.get("input_prompt", "")),
         columns=int(terminal_raw.get("columns", 120)),
-        rows=rows,
+        rows=int(terminal_raw.get("rows", 60)),
         poll_interval=float(terminal_raw.get("poll_interval", 1.2)),
         refresh_interval=float(terminal_raw.get("refresh_interval", 1.5)),
         health_check_interval=float(terminal_raw.get("health_check_interval", 10.0)),
@@ -286,10 +272,6 @@ def write_config(config: AppConfig, path: Path | str = DEFAULT_CONFIG_PATH) -> P
             "[notion]",
             f"token = {_toml_string(config.notion.token)}",
             f"api_version = {_toml_string(config.notion.api_version)}",
-            f"page_id = {_toml_string(config.notion.page_id)}",
-            f"terminal_block_id = {_toml_string(config.notion.terminal_block_id)}",
-            f"input_block_id = {_toml_string(config.notion.input_block_id)}",
-            f"page_url = {_toml_string(config.notion.page_url)}",
             f"parent_page_id = {_toml_string(config.notion.parent_page_id)}",
             f"help_page_id = {_toml_string(config.notion.help_page_id)}",
             f"help_page_url = {_toml_string(config.notion.help_page_url)}",
@@ -382,6 +364,13 @@ def _terminal_names(count: int, raw_names: object) -> list[str]:
     return names
 
 
+def _bool(raw: dict, key: str, name: str) -> bool:
+    value = raw.get(key, False)
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be true or false")
+    return value
+
+
 def _required(raw: dict, key: str) -> str:
     value = str(raw.get(key, "")).strip()
     if not value:
@@ -439,52 +428,16 @@ def _load_sandbox(sandbox_raw: dict) -> SandboxSettings:
         if isinstance(item, dict)
     ]
 
-    # Older configs used `mode = "..."`, `workspace = "<path>"` and
-    # `workspace_enabled`; map them onto the explicit switches.
-    legacy_mode = str(sandbox_raw.get("mode", "none"))
-    raw_workspace = sandbox_raw.get("workspace", False)
-    if isinstance(raw_workspace, bool):
-        workspace = raw_workspace
-        legacy_workspace_path = ""
-    else:
-        legacy_workspace_path = str(raw_workspace)
-        workspace = bool(
-            sandbox_raw.get("workspace_enabled", legacy_mode == "workspace")
-        )
-
-    if "read_only" in sandbox_raw:
-        read_only = bool(sandbox_raw.get("read_only"))
-    else:
-        read_only = legacy_mode == "read_only"
-
-    deny_read = _str_list(sandbox_raw.get("deny_read", []))
-    deny_write = _str_list(sandbox_raw.get("deny_write", []))
-
-    if "enabled" in sandbox_raw:
-        enabled = bool(sandbox_raw.get("enabled"))
-    else:
-        # Configs written before `enabled` existed turned the sandbox on
-        # implicitly through any restriction switch; keep them protected.
-        enabled = bool(
-            read_only
-            or workspace
-            or sandbox_raw.get("masking", False)
-            or deny_read
-            or deny_write
-        )
-
     return SandboxSettings(
-        enabled=enabled,
+        enabled=bool(sandbox_raw.get("enabled", False)),
         srt_path=str(sandbox_raw.get("srt_path", "")),
-        read_only=read_only,
-        workspace=workspace,
-        workspace_path=str(
-            sandbox_raw.get("workspace_path", legacy_workspace_path)
-        ),
+        read_only=bool(sandbox_raw.get("read_only", False)),
+        workspace=_bool(sandbox_raw, "workspace", "sandbox.workspace"),
+        workspace_path=str(sandbox_raw.get("workspace_path", "")),
         allow_read=_str_list(sandbox_raw.get("allow_read", [])),
         allow_write=_str_list(sandbox_raw.get("allow_write", [])),
-        deny_read=deny_read,
-        deny_write=deny_write,
+        deny_read=_str_list(sandbox_raw.get("deny_read", [])),
+        deny_write=_str_list(sandbox_raw.get("deny_write", [])),
         allowed_domains=_str_list(sandbox_raw.get("allowed_domains", [])),
         denied_domains=_str_list(sandbox_raw.get("denied_domains", [])),
         tls_terminate=bool(sandbox_raw.get("tls_terminate", False)),

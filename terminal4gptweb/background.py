@@ -9,10 +9,9 @@ import time
 from pathlib import Path
 from typing import TextIO
 
-from .config import DEFAULT_CONFIG_PATH, load_config
+from .config import CACHE_DIR, DEFAULT_CONFIG_PATH, load_config
 
 
-CACHE_DIR = Path.home() / ".cache" / "notion_is_terminal"
 PID_FILE = CACHE_DIR / "daemon.pid"
 LOG_FILE = CACHE_DIR / "daemon.log"
 LOCK_FILE = CACHE_DIR / "instance.lock"
@@ -66,7 +65,7 @@ def start_daemon(config_path: Path | str = DEFAULT_CONFIG_PATH) -> int:
     log = LOG_FILE.open("ab", buffering=0)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    env["NIT_DAEMON_MODE"] = "1"
+    env["T4G_DAEMON_MODE"] = "1"
 
     process = subprocess.Popen(
         [
@@ -223,10 +222,7 @@ def process_is_our_daemon(pid: int) -> bool:
         # cannot prove ownership, fail closed and never signal that PID.
         return False
 
-    return (
-        (" terminal4gptweb " in f" {cmdline} " or " notion_is_terminal " in f" {cmdline} ")
-        and " run " in f" {cmdline} "
-    )
+    return " terminal4gptweb " in f" {cmdline} " and " run " in f" {cmdline} "
 
 
 def _remove_pid_file() -> None:

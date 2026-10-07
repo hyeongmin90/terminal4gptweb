@@ -384,7 +384,7 @@ t4g reinit
 t4g daemon restart
 ```
 
-The saved parent page is reused. Older configs without a saved parent will show the Search Page / URL selection again.
+The saved parent page is reused.
 
 ## 14. Security checklist
 

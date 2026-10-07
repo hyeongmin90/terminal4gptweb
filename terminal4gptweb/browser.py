@@ -317,7 +317,7 @@ class BrowserController:
             marker_visible = bool(
                 self._page.evaluate(
                     """() => {
-                        const marker = document.getElementById('__nit_cursor_overlay__');
+                        const marker = document.getElementById('__t4g_cursor_overlay__');
                         if (!marker) return false;
                         const wasVisible = marker.style.visibility !== 'hidden';
                         marker.style.visibility = 'hidden';
@@ -333,7 +333,7 @@ class BrowserController:
                 try:
                     self._page.evaluate(
                         """() => {
-                            const marker = document.getElementById('__nit_cursor_overlay__');
+                            const marker = document.getElementById('__t4g_cursor_overlay__');
                             if (marker) marker.style.visibility = 'visible';
                         }"""
                     )
@@ -468,10 +468,10 @@ class BrowserController:
         assert self._page is not None
         self._page.evaluate(
             """([x, y]) => {
-                let marker = document.getElementById('__nit_cursor_overlay__');
+                let marker = document.getElementById('__t4g_cursor_overlay__');
                 if (!marker) {
                     marker = document.createElement('div');
-                    marker.id = '__nit_cursor_overlay__';
+                    marker.id = '__t4g_cursor_overlay__';
                     Object.assign(marker.style, {
                         position: 'fixed',
                         zIndex: '2147483647',

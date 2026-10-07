@@ -367,7 +367,7 @@ Notion page title
 runtime:
 
 ```text
-~/.cache/notion_is_terminal/
+~/.cache/t4g/
 ├─ daemon.pid
 ├─ daemon.log
 ├─ instance.lock
@@ -390,7 +390,7 @@ Parent Page
 
 ## 9. Sandbox 설정 (srt)
 
-`enabled`가 전체 스위치입니다. 켜면 셸이 [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime) 안에서 실행되고, t4g가 `[sandbox]` 설정으로 `~/.cache/notion_is_terminal/srt-settings.json`을 만들어 srt에 넘깁니다.
+`enabled`가 전체 스위치입니다. 켜면 셸이 [Anthropic Sandbox Runtime (srt)](https://github.com/anthropic-experimental/sandbox-runtime) 안에서 실행되고, t4g가 `[sandbox]` 설정으로 `~/.cache/t4g/srt-settings.json`을 만들어 srt에 넘깁니다.
 
 예:
 
@@ -681,9 +681,7 @@ t4g reinit
 t4g daemon restart
 ```
 
-저장된 `parent_page_id`가 있으면 같은 parent 아래에 새 control page를 만듭니다.
-
-오래된 config라 parent 정보가 없으면 Search Page / URL 선택 UI가 다시 표시됩니다.
+저장된 `parent_page_id`의 parent 아래에 새 control page를 만듭니다.
 
 ## 16. 보안 체크리스트
 

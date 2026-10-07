@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .browser import BrowserController, BrowserError, BrowserObservation, parse_browser_command
 from .config import AppConfig, DEFAULT_CONFIG_PATH, TerminalPageSettings, write_config
-from .notion import NotionClient, NotionError, page_title
+from .notion import NotionClient, NotionError
 from .protocol import InputAction, InputKind, extract_submission
 from .sandbox import SandboxUnavailableError
 from .terminal import InputTooLargeError, PTYSession
@@ -65,24 +65,8 @@ class TerminalDaemon:
     def _ensure_terminal_pages(self) -> None:
         pages = self.config.notion.terminal_pages
         config_changed = False
-        if not pages:
-            pages.append(
-                TerminalPageSettings(
-                    page_id=self.config.notion.page_id,
-                    terminal_block_id=self.config.notion.terminal_block_id,
-                    input_block_id=self.config.notion.input_block_id,
-                    page_url=self.config.notion.page_url,
-                )
-            )
-
         if self.config.terminal.count > len(pages):
-            parent_page_id = self.config.notion.parent_page_id.strip()
-            if not parent_page_id:
-                raise RuntimeError(
-                    "terminal.count exceeds the configured Notion terminal pages, but "
-                    "notion.parent_page_id is missing. Run `t4g reinit` once to rebuild "
-                    "the multi-terminal page set."
-                )
+            parent_page_id = self.config.notion.parent_page_id
             for index in range(len(pages), self.config.terminal.count):
                 name = self.config.terminal.names[index]
                 created = self.notion.create_terminal_page(
@@ -106,15 +90,6 @@ class TerminalDaemon:
 
         active_pages = pages[: self.config.terminal.count]
         for index, page in enumerate(active_pages):
-            notion_page = self.notion.get_page(page.page_id)
-            if index == 0 and not self.config.terminal.names_explicit:
-                # Legacy configs did not persist the user-selected page title.
-                # Adopt the current Notion title instead of silently renaming it
-                # to the new default on the first multi-terminal-aware start.
-                existing_title = page_title(notion_page)
-                if existing_title and existing_title != self.config.terminal.names[0]:
-                    self.config.terminal.names[0] = existing_title
-                    config_changed = True
             self.notion.update_page_title(page.page_id, self.config.terminal.names[index])
 
         if config_changed:

@@ -191,7 +191,7 @@ def doctor(config_path: Path) -> int:
 
             if len(pages) < config.terminal.count:
                 checks.append((
-                    bool(config.notion.parent_page_id),
+                    True,
                     f"{config.terminal.count - len(pages)} terminal page(s) will be created on next daemon start",
                 ))
 

@@ -493,9 +493,9 @@ t4g daemon logs -f
 runtime 파일:
 
 ```text
-~/.cache/notion_is_terminal/daemon.pid
-~/.cache/notion_is_terminal/daemon.log
-~/.cache/notion_is_terminal/instance.lock
+~/.cache/t4g/daemon.pid
+~/.cache/t4g/daemon.log
+~/.cache/t4g/instance.lock
 ```
 
 WSL 터미널 창을 닫아도 daemon은 계속 실행됩니다.
@@ -680,7 +680,7 @@ t4g daemon restart
 
 ```text
 sandbox.enabled = false   →  bash                                  (srt 불필요)
-sandbox.enabled = true    →  srt -s ~/.cache/notion_is_terminal/srt-settings.json \
+sandbox.enabled = true    →  srt -s ~/.cache/t4g/srt-settings.json \
                                -- script -qfec "bash --rcfile … -i" /dev/null
 ```
 
@@ -798,10 +798,6 @@ $ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/user
 [notion]
 token = "secret_xxx"
 api_version = "2026-03-11"
-page_id = "..."
-terminal_block_id = "..."
-input_block_id = "..."
-page_url = "https://..."
 parent_page_id = "..."
 help_page_id = "..."
 help_page_url = "https://..."
@@ -810,6 +806,12 @@ browser_image_block_id = "..."
 browser_vision_page_id = "..."
 browser_vision_block_id = "..."
 browser_vision_page_url = "https://..."
+
+[[notion.terminals]]
+page_id = "..."
+terminal_block_id = "..."
+input_block_id = "..."
+page_url = "https://..."
 
 [terminal]
 shell = "/bin/bash"
@@ -881,7 +883,6 @@ names = ["Shell", "Server", "Tests"]
 
 daemon 하나가 설정된 수만큼 독립 PTY를 띄우고, 선택한 Notion 부모 페이지 바로 아래에 이름별 제어 페이지를 둡니다. `count`는 1~16 범위이며 기본값은 `1`입니다. `names`는 활성 터미널 수만큼 사용되고 페이지 이름은 서로 달라야 합니다.
 
-- 기존 단일 터미널 config는 별도 마이그레이션 작업 없이 `count = 1`로 동작합니다. 이전에 사용자가 지정한 기존 Notion 터미널 페이지 제목도 첫 실행에서 보존합니다.
 - `count`를 늘리고 daemon을 재시작하면 부족한 터미널 페이지를 같은 부모 아래에 자동 생성하고 config의 `[[notion.terminals]]` 목록을 갱신합니다.
 - 이름을 바꾸고 재시작하면 활성 터미널 페이지 제목도 갱신됩니다.
 - `count`를 줄여도 기존 Notion 페이지를 자동 삭제하지 않습니다. 앞에서부터 설정된 수만 활성화되므로 다시 늘릴 때 기존 페이지를 재사용할 수 있습니다.
